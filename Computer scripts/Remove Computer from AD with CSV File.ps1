@@ -1,0 +1,1 @@
+﻿import-csv 'C:\AD User\computers.csv' | Foreach-Object {Remove-ADcomputer -Identity $_.SamAccountName -Confirm:$False }

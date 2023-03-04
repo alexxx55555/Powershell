@@ -1,0 +1,1 @@
+﻿read-host "Enter the user account to Disable" | Disable-ADAccount

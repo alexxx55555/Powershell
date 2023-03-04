@@ -1,0 +1,1 @@
+﻿read-host "Enter the user account to enable" | Enable-ADAccount

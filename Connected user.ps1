@@ -1,0 +1,1 @@
+﻿Get-CimInstance -ComputerName vinokura01 -ClassName Win32_ComputerSystem |Select UserName
