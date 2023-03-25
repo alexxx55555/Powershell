@@ -19,7 +19,8 @@ Function Test-PasswordForDomain {
         return $false
     }
    if ($AccountDisplayName) {
-    $tokens = $AccountDisplayName.Split(",.-,_ #`t")
+    $tokens = $AccountDis
+    playName.Split(",.-,_ #`t")
     foreach ($token in $tokens) {
         if (($token) -and ($Password -match "$token")) {
             return $false
@@ -69,7 +70,7 @@ $s=New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri http://ex2
 Import-PSSession -session $s -AllowClobber  -DisableNameChecking
 
 
-# Import SFB Module
+#Import SFB Module
 $pass = Get-Content "C:\test\Password.txt" | ConvertTo-SecureString
 $user = “vinokura”
 $Credentials = new-object -typename System.Management.Automation.PSCredential -argumentlist $user, $pass
@@ -109,7 +110,7 @@ do {
                 [void][System.Windows.Forms.MessageBox]::Show("Length of $($EmployeeNumber.ToString().Length) digits is invalid for employee number, please use up to 3 digits.")
 
             }
-        # Write-Host -ForegroundColor Yellow "Length of $($EmployeeNumber.length) digits is invalid for employee number, please use up to 3 digits."
+       
  
         }
 
@@ -118,7 +119,7 @@ do {
     }
     catch [System.Management.Automation.RuntimeException] {
       [void][System.Windows.Forms.MessageBox]::Show("You can only use numbers!")
-        #write-host -ForegroundColor Cyan "You can only use numbers!"
+       
        $EmployeeNumber = ""
     }
 }
@@ -133,12 +134,34 @@ until (($EmployeeNumber -or $EmployeeNumber -eq 0) -and ($EmployeeNumber -match 
     $newNum = Get-AvailableEmployeeNumber -EmployeeNumber $EmployeeNumber -AllNum $allNum
     if($newNum -ne $EmployeeNumber){
     
-        #write-host -ForegroundColor Green "EmployeeNumber '$EmployeeNumber' is already in use by $((Get-ADUser -Filter {EmployeeNumber -eq $EmployeeNumber}).SamAccountName)"
+       
         [void][System.Windows.Forms.MessageBox]::Show("EmployeeNumber '$EmployeeNumber' is already in use by $((Get-ADUser -Filter {EmployeeNumber -eq $EmployeeNumber}).SamAccountName)")
     }
      [void][System.Windows.Forms.MessageBox]::Show("Employee number'$newNum' is Available")
-    #Write-Output "Employee number'$newNum' is Available"
+    
 
+$validPhoneNumber = $false
+while (-not $validPhoneNumber) {
+    $officePhone = Read-Host -Prompt "Enter Office Phone Number (10 digits)"
+    if ($officePhone -match '^\d{10}$') {
+        $validPhoneNumber = $true
+    } else {
+        [void][System.Windows.Forms.MessageBox]::Show("Invalid phone number. Please enter a 10-digit phone number.")
+    }
+}
+
+$office = Read-Host -Prompt "Enter Office Location"
+
+$jobTitle = Read-Host -Prompt "Enter Job Title"
+
+$manager = $null
+while (-not $manager) {
+    $managerUsername = Read-Host -Prompt "Enter Manager's Username"
+    $manager = Get-ADUser -Filter {SamAccountName -eq $managerUsername}
+    if (-not $manager) {
+        [void][System.Windows.Forms.MessageBox]::Show("Manager not found. Please check the username and try again.")
+    }
+}
 
 
 $password = Get-RandomCharacters  -length 2 -characters 'abcdefghiklmnoprstuvwxyz'
@@ -187,7 +210,11 @@ New-ADUser `
 -SamAccountName $username  `
 -AccountPassword (ConvertTo-SecureString $password -AsPlainText -Force) `
 -Path $ADPath `
--Enabled 1   
+-Title $jobTitle `
+-Office $office `
+-OfficePhone $officePhone `
+-Enabled 1 `
+-Manager $manager.DistinguishedName
 }
 else
 {
@@ -202,7 +229,11 @@ New-ADUser `
 -SamAccountName $username  `
 -AccountPassword (ConvertTo-SecureString $password -AsPlainText -Force) `
 -Path $ADPath `
--Enabled 1   
+-Title $jobTitle `
+-Office $office `
+-OfficePhone $officePhone `
+-Enabled 1 `
+-Manager $manager.DistinguishedName
 }
 
 #Copy Groups
@@ -224,7 +255,6 @@ $Result = $SourceUser.memberof | Add-ADGroupMember -Members $username -PassThru
 
 
  [void][System.Windows.Forms.MessageBox]::Show("The password for $username is: $password")
-#Write-Host -ForegroundColor Blue "The password for $username is: $password"
 
 
 
@@ -243,6 +273,10 @@ Enable-CsUser -Identity $username -RegistrarPool "Skype-Server.alex.local" -SipA
     Last Name: $lastname 
     Employess number: $newNum 
     Username: $username 
+    Title: $jobTitle 
+    Manager: $($manager.GivenName) $($manager.Surname)
+    Office Location: $office 
+    OfficePhone: $officePhone 
     E-mail: $email 
     Sip: $SFB
     DL Groups: $($Result.Where({$_.groupcategory -eq 'distribution'}).name -join ',')
@@ -276,6 +310,10 @@ Enable-CsUser -Identity $username -RegistrarPool "Skype-Server.alex.local" -SipA
     <p><b><font color='black'><h4>Last Name: $lastname </b></p></font></h4></b>
     <p><b><font color='black'><h4>Employess number: $newNum </b></p></font></h4></b>
     <p><b><font color='black'><h4>Username: $username </b></p></font></h4></b>
+    <p><b><font color='black'><h4>Title: $jobTitle </b></p></font></h4></b>
+    <p><b><font color='black'><h4>Manager: $($manager.GivenName) $($manager.Surname) </b></p></font></h4></b>
+    <p><b><font color='black'><h4>Office Location: $office </b></p></font></h4></b>
+    <p><b><font color='black'><h4>OfficePhone: $officePhone </b></p></font></h4></b>
     <p><b><font color='black'><h4>E-mail: $email </b></p></font></h4></b>
     <p><b><font color='black'><h4>Sip: $SFB</b></p></font></h4></b>
     <p><b><font color='black'><h4>Groups: $($SelectedGroups -join ",")</b></p></font></h4></b>
@@ -301,7 +339,7 @@ Enable-CsUser -Identity $username -RegistrarPool "Skype-Server.alex.local" -SipA
 
 #Check if user is creted successfully or not Pop-Up                
             
-$username
+
 $User = Get-ADUser -LDAPFilter "(sAMAccountName=$username)"
 If ($Null -eq $User) {[void] [System.Windows.Forms.MessageBox]::Show("The user $username not created", "Information") }
 Else { [void][System.Windows.Forms.MessageBox]::Show("The user $username created successfully!", "Information")}
@@ -310,17 +348,10 @@ Else { [void][System.Windows.Forms.MessageBox]::Show("The user $username created
         }
 
 
-#Check if user is creted successfully or not
-
-#$username
-#$User = Get-ADUser -LDAPFilter "(sAMAccountName=$username)"
-#If ($User -eq $Null) {Write-Host  -ForegroundColor DarkRed "The user"$username" not created."}
-#Else {Write-Host  -ForegroundColor Green "The user"$username" created successfully."}
-
 
 
 $firstname = Read-Host -Prompt "Enter First Name"
 }
  [void][System.Windows.Forms.MessageBox]::Show(" Done, Thank You")
-#Write-Host -ForegroundColor Red "Done, Thank You"
+
 
