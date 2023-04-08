@@ -282,7 +282,7 @@ $employeeNumberTextbox.add_KeyDown({
         
         # Check if the length of the entered employee number is not more than 4 digits
         if ($employeeNumberTextbox.Text.Length -gt 4) {
-            [System.Windows.Forms.MessageBox]::Show("Employee number should not be more than 4 digits.")
+            [System.Windows.Forms.MessageBox]::Show("Length of employee number should not be more than 4 digits.")
             $employeeNumberTextbox.Text = $employeeNumberTextbox.Text.Substring(0, 4)
         }
         else {
@@ -302,21 +302,23 @@ $timer.add_Tick({
     # Stop the timer
     $timer.Stop()
 
-    # Check if the entered employee number is already in use by another employee
-    $searcher = New-Object System.DirectoryServices.DirectorySearcher
-    $employeeNumberText = $($employeeNumberTextbox.Text).TrimStart('0')
-    $searcher.Filter = "(&(objectCategory=person)(objectClass=user)(employeeNumber=$($employeeNumberText)))"
-    $result = $searcher.FindOne()
+    # Check if the employeeNumberTextbox is ReadOnly
+    if (-not $employeeNumberTextbox.ReadOnly) {
+        # Check if the entered employee number is already in use by another employee
+        $searcher = New-Object System.DirectoryServices.DirectorySearcher
+        $employeeNumberText = $($employeeNumberTextbox.Text).TrimStart('0')
+        $searcher.Filter = "(&(objectCategory=person)(objectClass=user)(employeeNumber=$($employeeNumberText)))"
+        $result = $searcher.FindOne()
 
-    if ($result) {
-        $employeeName = $result.Properties["displayName"][0]
-        $allNumbersInUse = @($searcher.FindAll() | ForEach-Object { $_.Properties["employeeNumber"][0] })
-        $suggestedNumber = Get-AvailableEmployeeNumber -EmployeeNumber $employeeNumberText -AllNum $allNumbersInUse
-        [System.Windows.Forms.MessageBox]::Show("Employee number $($employeeNumberTextbox.Text) is already in use by $employeeName. Please use another number. Next available number is $suggestedNumber.")
-        $employeeNumberTextbox.Text = $suggestedNumber
+        if ($result) {
+            $employeeName = $result.Properties["displayName"][0]
+            $allNumbersInUse = @($searcher.FindAll() | ForEach-Object { $_.Properties["employeeNumber"][0] })
+            $suggestedNumber = Get-AvailableEmployeeNumber -EmployeeNumber $employeeNumberText -AllNum $allNumbersInUse
+            [System.Windows.Forms.MessageBox]::Show("Employee number $($employeeNumberTextbox.Text) is already in use by $employeeName. Please use another employee number. Next available employee number is $suggestedNumber.")
+            $employeeNumberTextbox.Text = $suggestedNumber
+        }
     }
 })
-
 
 
 $titleTextbox = New-Object System.Windows.Forms.TextBox
@@ -563,5 +565,3 @@ $form.Controls.Add($resetButton)
 
 # Display the form
 $form.ShowDialog() | Out-Null
-
-
