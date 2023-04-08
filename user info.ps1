@@ -1,9 +1,56 @@
-﻿Import-Module ActiveDirectory
+﻿# Import the ActiveDirectory module
+Import-Module ActiveDirectory
 
+# Define a function to get all the usernames in a specific OU
 function Get-UsernamesFromAD {
+    # Set the distinguished name of the OU to search for users in
     $ouDistinguishedName = "OU=Users,OU=Alex,DC=alex,DC=local"
+    # Use the Get-ADUser cmdlet to search for all users in the OU and select only their SamAccountName property
     $users = Get-ADUser -Filter * -SearchBase $ouDistinguishedName -ResultSetSize 1000 | Select-Object -ExpandProperty SamAccountName
+    # Return the list of usernames
     return $users
+}
+
+# Define a function to check the EmployeeNumber attribute of a user and set the ReadOnly property of a text box accordingly
+function Check-EmployeeNumberAttribute {
+    param(
+        # The username to check the EmployeeNumber attribute for
+        [Parameter(Mandatory=$true)]
+        [string]$Username
+    )
+    
+    try {
+        # Use the Get-ADUser cmdlet to get the user object with the specified username and include the EmployeeNumber property
+        $user = Get-ADUser -Identity $Username -Properties EmployeeNumber
+        
+        # If the EmployeeNumber property has a value, set the ReadOnly property of the $employeeNumberTextbox object to $true
+        if ($user.EmployeeNumber) {
+            $employeeNumberTextbox.ReadOnly = $true
+        }
+        # Otherwise, set the ReadOnly property of the $employeeNumberTextbox object to $false
+        else {
+            $employeeNumberTextbox.ReadOnly = $false
+        }
+    }
+    catch {
+        # If an error occurs, write an error message to the console
+        Write-Error "Error: $_"
+    }
+}
+
+
+# Function to get the next available employee number
+function Get-AvailableEmployeeNumber {
+    param(
+        [int]$EmployeeNumber,
+        [int[]]$AllNum
+    )
+
+    while ($AllNum -contains $EmployeeNumber) {
+        $EmployeeNumber++
+    }
+
+    return $EmployeeNumber
 }
 
 # Load the Windows Forms assembly
@@ -45,7 +92,8 @@ $form.Controls.Add($searchButton)
 
 $searchButton.Add_Click({
     $username = $usernameTextbox.Text
-    
+    Check-EmployeeNumberAttribute -Username $username
+
     if ([string]::IsNullOrEmpty($username)) {
         [System.Windows.Forms.MessageBox]::Show("Please enter a username.")
     }
@@ -218,6 +266,58 @@ $employeeNumberTextbox.Size = New-Object System.Drawing.Size(260, 20)
 $employeeNumberTextbox.ReadOnly = $true  # set ReadOnly property to true
 $form.Controls.Add($employeeNumberTextbox)
 
+# Add the event handler to allow only digits, backspace, delete, and numeric keys in the employee number textbox
+$timer = New-Object System.Windows.Forms.Timer
+$timer.Interval = 1000  # 1000 milliseconds = 1 second
+$timer.Enabled = $false
+
+$employeeNumberTextbox.add_KeyDown({
+    $keyCode = $_.KeyCode
+
+    # Allow digits, backspace, delete, numeric keys, and arrow keys
+    if ($keyCode -ge 'D0' -and $keyCode -le 'D9' -or 
+        $keyCode -eq 'Back' -or $keyCode -eq 'Delete' -or
+        ($keyCode -ge 'NumPad0' -and $keyCode -le 'NumPad9') -or
+        ($keyCode -ge 'Left' -and $keyCode -le 'Down')) {
+        
+        # Check if the length of the entered employee number is not more than 4 digits
+        if ($employeeNumberTextbox.Text.Length -gt 4) {
+            [System.Windows.Forms.MessageBox]::Show("Employee number should not be more than 4 digits.")
+            $employeeNumberTextbox.Text = $employeeNumberTextbox.Text.Substring(0, 4)
+        }
+        else {
+            # Stop the timer
+            $timer.Stop()
+
+            # Start the timer
+            $timer.Start()
+        }
+    }
+    else {
+        $_.SuppressKeyPress = $true
+    }
+})
+
+$timer.add_Tick({
+    # Stop the timer
+    $timer.Stop()
+
+    # Check if the entered employee number is already in use by another employee
+    $searcher = New-Object System.DirectoryServices.DirectorySearcher
+    $employeeNumberText = $($employeeNumberTextbox.Text).TrimStart('0')
+    $searcher.Filter = "(&(objectCategory=person)(objectClass=user)(employeeNumber=$($employeeNumberText)))"
+    $result = $searcher.FindOne()
+
+    if ($result) {
+        $employeeName = $result.Properties["displayName"][0]
+        $allNumbersInUse = @($searcher.FindAll() | ForEach-Object { $_.Properties["employeeNumber"][0] })
+        $suggestedNumber = Get-AvailableEmployeeNumber -EmployeeNumber $employeeNumberText -AllNum $allNumbersInUse
+        [System.Windows.Forms.MessageBox]::Show("Employee number $($employeeNumberTextbox.Text) is already in use by $employeeName. Please use another number. Next available number is $suggestedNumber.")
+        $employeeNumberTextbox.Text = $suggestedNumber
+    }
+})
+
+
 
 $titleTextbox = New-Object System.Windows.Forms.TextBox
 $titleTextbox.Location = New-Object System.Drawing.Point(110, 170)
@@ -335,7 +435,7 @@ $updateButton.Add_Click({
                 $userOffice = $officeTextbox.Text
                 $userTitle = $titleTextbox.Text
                 $userPhone = $phoneTextbox.Text
-                $userSIP = $sipTextbox.Text
+                
                 
                 if (![string]::IsNullOrEmpty($userDisplayName)) {
                     $params.Add('DisplayName', $userDisplayName)
