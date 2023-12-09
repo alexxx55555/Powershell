@@ -62,5 +62,5 @@ Function Search-And-Install ($appName) {
     }
 }
 
-# Start the first searchaa
+# Start the first search
 Start-NewSearch
