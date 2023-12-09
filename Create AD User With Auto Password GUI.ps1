@@ -24,7 +24,7 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName Microsoft.VisualBasic
 Add-Type -AssemblyName System.Drawing
 
-#Check Password Policy
+#Define a function to check password policy
 Function Test-PasswordForDomain {
     Param (
         [Parameter(Mandatory=$true)][SecureString]$Password,
@@ -53,12 +53,14 @@ Function Test-PasswordForDomain {
     return $true   
 }
 
+# Function to generate random characters
 function Get-RandomCharacters($length, $characters) {
     $random = 1..$length | ForEach-Object { Get-Random -Maximum $characters.length }
     $private:ofs=""
     return [String]$characters[$random]
 }
 
+# Function to scramble a string
 function ScrambleString([string]$inputString){     
     $characterArray = $inputString.ToCharArray()   
     $scrambledStringArray = $characterArray | Get-Random -Count $characterArray.Length     
@@ -66,16 +68,20 @@ function ScrambleString([string]$inputString){
     return $outputString 
 }
 
-# Check if employee number is free
+# Function to check if an employee number is available
 function Get-AvailableEmployeeNumber {
     param(
         [int]$EmployeeNumber,
         [string[]]$AllNum
     )
 
+    # Check if the employee number is already in use
     $existingUser = Get-ADUser -Filter {EmployeeNumber -eq $EmployeeNumber}
     if ($existingUser) {
-        [void][System.Windows.Forms.MessageBox]::Show("EmployeeNumber '$EmployeeNumber' is already in use by $($existingUser.SamAccountName)", "Employee Number In Use")
+
+        
+       [void][System.Windows.Forms.MessageBox]::Show("EmployeeNumber '$EmployeeNumber' is already in use by $($existingUser.SamAccountName)", "Employee Number In Use")
+       # Find the next available employee number
         while ($AllNum -contains $EmployeeNumber) {
             $EmployeeNumber++
         }
@@ -87,7 +93,7 @@ function Get-AvailableEmployeeNumber {
     return $EmployeeNumber
 }
 
-
+# Function to check if a manager exists in Active Directory
 function Check-ManagerInAD {
     param (
         [string]$managerUsername,
@@ -103,6 +109,7 @@ function Check-ManagerInAD {
 
     if ($managerFullName) {
         $names = $managerFullName.Split(' ')
+        # Check by GivenName (first name) and Surname (last name)
         if ($names.Count -eq 2) {
             $manager = Get-ADUser -Filter {GivenName -eq $names[0] -and Surname -eq $names[1]} -ErrorAction SilentlyContinue
             if ($manager) {
@@ -114,7 +121,7 @@ function Check-ManagerInAD {
     return $null
 }
 
-
+# Function to handle KeyPress events for textboxes
 function Combined_KeyPress {
     param(
         [System.Object]$sender,
@@ -143,7 +150,7 @@ function Combined_KeyPress {
 
 
 
-# Function to check for the source user's name
+# Function to check for the existence of a source user in Active Directory
 function Check-SourceUserInAD {
     param (
         [string]$sourceUsername
@@ -161,8 +168,6 @@ function Check-SourceUserInAD {
 
 
 
-
-
 #User creation path
 $ADPath = "OU=Users,OU=Alex,DC=alex,DC=local"
 
@@ -176,11 +181,10 @@ $main_form.Height = 400
 $main_form.AutoSize = $true
 
 # Set the form border style to FixedSingle to prevent resizing
-
 $main_form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedSingle
 
-#######
 
+# Load and display the company logo
 $img =  [System.Drawing.Image]::Fromfile('\\dc1\Applications\alex.jpg')
 $companyLogo = New-Object System.Windows.Forms.PictureBox
 $companyLogo.Width = $img.Size.Width
@@ -188,67 +192,71 @@ $companyLogo.Height = $img.Size.Height
 $companyLogo.Image = $img
 $main_form.controls.add($companyLogo)
 
-
+# Define the width of labels, textboxes, and spacing between them
 $labelsWidth = 100
 $textboxWidth = 150
 $spacing = 10
 
-
-#######
-
-
-
-
+# Create a label for the First Name field
 $firstNameLabel = New-Object System.Windows.Forms.Label
 $firstNameLabel.Text = "First Name"
 $firstNameLabel.Location = New-Object System.Drawing.Point(10, 90)
 $firstNameLabel.AutoSize = $true
 $main_form.Controls.Add($firstNameLabel)
 
+# Create a textbox for entering the First Name
 $firstNameTextBox = New-Object System.Windows.Forms.TextBox
 $firstNameTextBox.Width = 100
 $firstNameTextBox.Location = New-Object System.Drawing.Point(110, 90)
 $main_form.Controls.Add($firstNameTextBox)
 
+# Create a label for the Last Name field
 $lastNameLabel = New-Object System.Windows.Forms.Label
 $lastNameLabel.Text = "Last Name"
 $lastNameLabel.Location = New-Object System.Drawing.Point(10, 120)
 $lastNameLabel.AutoSize = $true
 $main_form.Controls.Add($lastNameLabel)
 
+# Create a textbox for entering the Last Name
 $lastNameTextBox = New-Object System.Windows.Forms.TextBox
 $lastNameTextBox.Width = 100
 $lastNameTextBox.Location = New-Object System.Drawing.Point(110, 120)
 $main_form.Controls.Add($lastNameTextBox)
 
+# Create a label for the Job Title field
 $jobTitleLabel = New-Object System.Windows.Forms.Label
 $jobTitleLabel.Text = "Job Title"
 $jobTitleLabel.Location = New-Object System.Drawing.Point(10, 150)
 $jobTitleLabel.AutoSize = $true
 $main_form.Controls.Add($jobTitleLabel)
 
+# Create a textbox for entering the Job Title
 $jobTitleTextBox = New-Object System.Windows.Forms.TextBox
 $jobTitleTextBox.Width = 100
 $jobTitleTextBox.Location = New-Object System.Drawing.Point(110, 150)
 $main_form.Controls.Add($jobTitleTextBox)
 
+# Create a label for the Manager field
 $managerLabel = New-Object System.Windows.Forms.Label
 $managerLabel.Text = "Manager"
 $managerLabel.Location = New-Object System.Drawing.Point(10, 180)
 $managerLabel.AutoSize = $true
 $main_form.Controls.Add($managerLabel)
 
+# Create a textbox for entering the Manager
 $managerTextBox = New-Object System.Windows.Forms.TextBox
 $managerTextBox.Width = 100
 $managerTextBox.Location = New-Object System.Drawing.Point(110, 180)
 $main_form.Controls.Add($managerTextBox)
 
+#Create a label for the Phone field
 $PhoneLabel = New-Object System.Windows.Forms.Label
 $PhoneLabel.Text = "Phone"
 $PhoneLabel.Location = New-Object System.Drawing.Point(10, 210)
 $PhoneLabel.AutoSize = $true
 $main_form.Controls.Add($PhoneLabel)
 
+# Add a KeyPress event handler to restrict input using the Combined_KeyPress function
 $PhoneLabelTextBox = New-Object System.Windows.Forms.TextBox
 $PhoneLabelTextBox.Name = 'PhoneLabelTextBox'
 $PhoneLabelTextBox.Width = 100
@@ -256,48 +264,55 @@ $PhoneLabelTextBox.Location = New-Object System.Drawing.Point(110, 210)
 $PhoneLabelTextBox.Add_KeyPress({ Combined_KeyPress $args[0] $args[1] })
 $main_form.Controls.Add($PhoneLabelTextBox)
 
+# Create a label for the Employee Number field
 $employeeNumberLabel = New-Object System.Windows.Forms.Label
 $employeeNumberLabel.Text = "Employee number"
 $employeeNumberLabel.Location = New-Object System.Drawing.Point(10, 240)
 $employeeNumberLabel.AutoSize = $true
 $main_form.Controls.Add($employeeNumberLabel)
 
+# Create a textbox for entering the Employee Number
 $EmployeeNumberTextBox = New-Object System.Windows.Forms.TextBox
 $EmployeeNumberTextBox.Name = 'EmployeeNumberTextBox'
 $EmployeeNumberTextBox.Width = 100
 $EmployeeNumberTextBox.Location = New-Object System.Drawing.Point(110, 240)
+# Add a KeyPress event handler to restrict input using the Combined_KeyPress function
 $EmployeeNumberTextBox.Add_KeyPress({ Combined_KeyPress $args[0] $args[1] })
 $main_form.Controls.Add($EmployeeNumberTextBox)
 
-
-
+# Create a label for the Location field
 $officeLocationLabel = New-Object System.Windows.Forms.Label
 $officeLocationLabel.Text = "Location"
 $officeLocationLabel.Location = New-Object System.Drawing.Point(10, 270)
 $officeLocationLabel.AutoSize = $true
 $main_form.Controls.Add($officeLocationLabel)
 
+# Create a textbox for entering the Location
 $officeLocationTextBox = New-Object System.Windows.Forms.TextBox
 $officeLocationTextBox.Width = 100
 $officeLocationTextBox.Location = New-Object System.Drawing.Point(110, 270)
 $main_form.Controls.Add($officeLocationTextBox)
 
+# Create a label for the "Copy groups from" field
 $copyGroupsLabel = New-Object System.Windows.Forms.Label
 $copyGroupsLabel.Text = "Copy groups from:"
 $copyGroupsLabel.Location = New-Object System.Drawing.Point(10, 300)
 $copyGroupsLabel.AutoSize = $true
 $main_form.Controls.Add($copyGroupsLabel)
 
+# Create a textbox for entering the source for copying groups
 $copyGroupsTextBox = New-Object System.Windows.Forms.TextBox
 $copyGroupsTextBox.Width = 100
 $copyGroupsTextBox.Location = New-Object System.Drawing.Point(110, 300)
 $main_form.Controls.Add($copyGroupsTextBox)
 
+# Define Active Directory OUs and retrieve groups
 $ouDNs = @("OU=Groups,OU=Alex,DC=alex,DC=local", "OU=DL,OU=Alex,DC=alex,DC=local")
 $allGroups = foreach ($ouDN in $ouDNs) {
     Get-ADGroup -Filter "objectClass -eq 'group' -or objectClass -eq 'msExchDynamicDistributionList'" -SearchBase $ouDN
 }
 
+# Create the OK button
 $OKButton = New-Object System.Windows.Forms.Button
 $OKButton.Location = New-Object System.Drawing.Point(10, 340)
 $OKButton.Size = New-Object System.Drawing.Size(75, 23)
@@ -306,6 +321,7 @@ $OKButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
 $main_form.AcceptButton = $OKButton
 $main_form.Controls.Add($OKButton)
 
+# Create the Cancel button
 $CancelButton = New-Object System.Windows.Forms.Button
 $CancelButton.Location = New-Object System.Drawing.Point(100, 340)
 $CancelButton.Size = New-Object System.Drawing.Size(75, 23)
@@ -350,7 +366,7 @@ $officePhone = $PhoneLabelTextBox.Text
 $officeLocation = $officeLocationTextBox.Text
 $selectedGroups = @($userGroupsListBox.CheckedItems)
 
- 
+# Generate a random password 
 $password = Get-RandomCharacters -length 2 -characters 'abcdefghiklmnoprstuvwxyz'
     $password += Get-RandomCharacters -length 1 -characters 'ABCDEFGHKLMNOPRSTUVWXYZ'
     $password += Get-RandomCharacters -length 1 -characters '1234567890'
@@ -362,6 +378,7 @@ $password = Get-RandomCharacters -length 2 -characters 'abcdefghiklmnoprstuvwxyz
     $username = $basename + $lastName.Substring(0,$i)
     $username = $username.ToLower()
    
+   # Generate a unique username by appending a number if necessary
     while ((Get-ADUser -filter {SamAccountName -eq $username}).SamAccountName -eq $username){
         if($i -gt $lastName.Length){
             # update the basename and reset $i
@@ -372,6 +389,7 @@ $password = Get-RandomCharacters -length 2 -characters 'abcdefghiklmnoprstuvwxyz
         $username = $username.ToLower()
     }
 
+    # Generate email and Skype for Business addresses based on the username
     $email = $username + "@alex.com" 
     $SFB = $username + "@alex.local" 
 
@@ -426,12 +444,15 @@ else {
 # Create the AD User
 New-ADUser @adUserParams
 
+# Initialize arrays to store copied groups
 $copiedDLGroups = @()
 $copiedSecurityGroups = @()
 
+# Retrieve the source username from the form
 $sourceUsername = $copyGroupsTextBox.Text
 $groupsCopied = $false
 
+# Loop until groups are copied
 while (-not $groupsCopied) {
     $sourceUser = Check-SourceUserInAD -sourceUsername $sourceUsername
 
@@ -478,7 +499,7 @@ while (-not $groupsCopied) {
 
 
 
-
+# Show a message box with the generated password
 [void][System.Windows.Forms.MessageBox]::Show("The password for $username is: $password")
 
 
@@ -489,7 +510,7 @@ while (-not $groupsCopied) {
     Enable-CsUser -Identity $username -RegistrarPool "Skype-Server.alex.local" -SipAddressType SamAccountName -SipDomain "alex.local" 
     
 
-    #Message Popup
+    # Construct and display a detailed message to verify the new user's details
     $subject = "New Users Created"
     $Message = @"
     New User Created: 
@@ -512,7 +533,7 @@ while (-not $groupsCopied) {
    $verifyDetails = [System.Windows.Forms.MessageBox]
    [void] $verifyDetails::Show($Message,"Verify New User Details","OK", "Information")
     
-    #Send Email
+    # Send an email with user creation details
     $server = "EX2019.alex.local"
     $to = "vinokura@alex.com"
     $from = "ITRobot@alex.com"
@@ -545,6 +566,7 @@ while (-not $groupsCopied) {
 		"
     }
 
+    # Send the email
     Send-MailMessage -To $to -From $from -Subject $subject -Body $Body -BodyAsHtml -SmtpServer $server
 
     #Check if user is created successfully or not Pop-Up                
