@@ -1,11 +1,66 @@
-﻿# Load the Windows Forms assembly
+﻿# Import the ActiveDirectory module
+Import-Module ActiveDirectory
+
+# Define a function to get all the usernames in a specific OU
+function Get-UsernamesFromAD {
+    # Set the distinguished name of the OU to search for users in
+    $ouDistinguishedName = "OU=Users,OU=Alex,DC=alex,DC=local"
+    # Use the Get-ADUser cmdlet to search for all users in the OU and select only their SamAccountName property
+    $users = Get-ADUser -Filter * -SearchBase $ouDistinguishedName -ResultSetSize 1000 | Select-Object -ExpandProperty SamAccountName
+    # Return the list of usernames
+    return $users
+}
+
+# Define a function to check the EmployeeNumber attribute of a user and set the ReadOnly property of a text box accordingly
+function Check-EmployeeNumberAttribute {
+    param(
+        # The username to check the EmployeeNumber attribute for
+        [Parameter(Mandatory=$true)]
+        [string]$Username
+    )
+    
+    try {
+        # Use the Get-ADUser cmdlet to get the user object with the specified username and include the EmployeeNumber property
+        $user = Get-ADUser -Identity $Username -Properties EmployeeNumber
+        
+        # If the EmployeeNumber property has a value, set the ReadOnly property of the $employeeNumberTextbox object to $true
+        if ($user.EmployeeNumber) {
+            $employeeNumberTextbox.ReadOnly = $true
+        }
+        # Otherwise, set the ReadOnly property of the $employeeNumberTextbox object to $false
+        else {
+            $employeeNumberTextbox.ReadOnly = $false
+        }
+    }
+    catch {
+        # If an error occurs, write an error message to the console
+        Write-Error "Error: $_"
+    }
+}
+
+
+# Function to get the next available employee number
+function Get-AvailableEmployeeNumber {
+    param(
+        [int]$EmployeeNumber,
+        [int[]]$AllNum
+    )
+
+    while ($AllNum -contains $EmployeeNumber) {
+        $EmployeeNumber++
+    }
+
+    return $EmployeeNumber
+}
+
+# Load the Windows Forms assembly
 Add-Type -AssemblyName System.Windows.Forms
 
 # Create a new form
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Edit User Info"
-$form.Width = 500
-$form.Height = 400
+$form.Width = 520
+$form.Height = 520
 $form.StartPosition = "CenterScreen"
 
 # Create the form controls
@@ -20,6 +75,14 @@ $usernameTextbox.Location = New-Object System.Drawing.Point(110, 20)
 $usernameTextbox.Size = New-Object System.Drawing.Size(150, 20)
 $form.Controls.Add($usernameTextbox)
 
+# Add AutoComplete to the username textbox
+$usernames = Get-UsernamesFromAD
+$usernameTextbox.AutoCompleteMode = [System.Windows.Forms.AutoCompleteMode]::Suggest
+$usernameTextbox.AutoCompleteSource = [System.Windows.Forms.AutoCompleteSource]::CustomSource
+$usernameTextbox.AutoCompleteCustomSource = New-Object System.Windows.Forms.AutoCompleteStringCollection
+$usernameTextbox.AutoCompleteCustomSource.AddRange($usernames)
+
+
 $searchButton = New-Object System.Windows.Forms.Button
 $searchButton.Location = New-Object System.Drawing.Point(270, 20)
 $searchButton.Size = New-Object System.Drawing.Size(100, 20)
@@ -29,23 +92,37 @@ $form.Controls.Add($searchButton)
 
 $searchButton.Add_Click({
     $username = $usernameTextbox.Text
-    
+
+    # Check if username is not empty before proceeding
     if ([string]::IsNullOrEmpty($username)) {
         [System.Windows.Forms.MessageBox]::Show("Please enter a username.")
+        return  # Exit the event handler if username is empty
     }
+
     else {
         try {
-            $user = Get-ADUser -Identity $username -Properties DisplayName, Description, EmailAddress, Office, Title, TelephoneNumber, msRTCSIP-PrimaryUserAddress, Enabled, MemberOf
+            $user = Get-ADUser -Identity $username -Properties DisplayName, Description, EmailAddress, Office, Title, TelephoneNumber, msRTCSIP-PrimaryUserAddress, Enabled, MemberOf,  EmployeeNumber, Manager 
+
             
             if ($user) {
                 $fullNameTextbox.Text = $user.DisplayName
                 $descriptionTextbox.Text = $user.Description
                 $emailTextbox.Text = $user.EmailAddress
+                $employeeNumberTextbox.Text = $user.EmployeeNumber         
+                if ($user.Manager) {
+    $manager = Get-ADUser -Identity $user.Manager -Properties DisplayName
+    $managerName = $manager.DisplayName
+    $managerTextbox.Text = $managerName
+}
+else {
+    $managerTextbox.Text = ""
+}
                 $officeTextbox.Text = $user.Office
                 $titleTextbox.Text = $user.Title
                 $phoneTextbox.Text = $user.TelephoneNumber
                 $sipTextbox.Text = $user."msRTCSIP-PrimaryUserAddress"
                 $updateButton.Enabled = $true
+
                 
                 # Set the "Enable User" and "Disable User" checkboxes based on the user account status
                 if ($user.Enabled) {
@@ -60,8 +137,12 @@ $searchButton.Add_Click({
                 $enableCheckbox.Enabled = $true
                 $disableCheckbox.Enabled = $true
                 
-                $groups = ($user.MemberOf | ForEach-Object {($_ -split ',')[0].Substring(3)}) -join ', '
-                $groupsTextbox.Text = $groups
+$groupMembership = Get-ADPrincipalGroupMembership $user
+$distGroups = ($groupMembership | Where-Object { $_.GroupCategory -eq "Distribution" } | Select-Object -ExpandProperty Name) -join ', '
+$secGroups = ($groupMembership | Where-Object { $_.GroupCategory -eq "Security" } | Select-Object -ExpandProperty Name) -join ', '
+$distGroupsTextbox.Text = $distGroups
+$secGroupsTextbox.Text = $secGroups
+
                 
                 # Enable all form controls
                 $form.Controls | ForEach-Object {
@@ -78,7 +159,34 @@ $searchButton.Add_Click({
     }
 })
 
+# Create the "Enable User" checkbox
+$enableCheckbox = New-Object System.Windows.Forms.CheckBox
+$enableCheckbox.Location = New-Object System.Drawing.Point(110, 400)
+$enableCheckbox.Size = New-Object System.Drawing.Size(100, 20)
+$enableCheckbox.Text = "Enable User"
+$enableCheckbox.Enabled = $false
+$form.Controls.Add($enableCheckbox)
 
+# Create the "Disable User" checkbox
+$disableCheckbox = New-Object System.Windows.Forms.CheckBox
+$disableCheckbox.Location = New-Object System.Drawing.Point(220, 400)
+$disableCheckbox.Size = New-Object System.Drawing.Size(100, 20)
+$disableCheckbox.Text = "Disable User"
+$disableCheckbox.Enabled = $false
+$form.Controls.Add($disableCheckbox)
+
+# Add event handlers for the checkboxes
+$enableCheckbox.Add_CheckedChanged({
+    if ($enableCheckbox.Checked) {
+        $disableCheckbox.Checked = $false
+    }
+})
+
+$disableCheckbox.Add_CheckedChanged({
+    if ($disableCheckbox.Checked) {
+        $enableCheckbox.Checked = $false
+    }
+})
 
 
 
@@ -94,15 +202,28 @@ $fullNameTextbox.Size = New-Object System.Drawing.Size(260, 20)
 $form.Controls.Add($fullNameTextbox)
 
 $label3 = New-Object System.Windows.Forms.Label
-$label3.Location = New-Object System.Drawing.Point(10, 80)
-$label3.Size = New-Object System.Drawing.Size(100, 20)
+$label3.Location = New-Object System.Drawing.Point(10, 350)
+$label3.Size = New-Object System.Drawing.Size(100, 40)     
 $label3.Text = "Description:"
 $form.Controls.Add($label3)
 
 $descriptionTextbox = New-Object System.Windows.Forms.TextBox
-$descriptionTextbox.Location = New-Object System.Drawing.Point(110, 80)
-$descriptionTextbox.Size = New-Object System.Drawing.Size(260, 20)
+$descriptionTextbox.Location = New-Object System.Drawing.Point(110, 350)
+$descriptionTextbox.Size = New-Object System.Drawing.Size(260, 20)     
 $form.Controls.Add($descriptionTextbox)
+
+
+$label10 = New-Object System.Windows.Forms.Label
+$label10.Location = New-Object System.Drawing.Point(10, 200)
+$label10.Size = New-Object System.Drawing.Size(100, 20)     
+$label10.Text = "Manager:"
+$form.Controls.Add($label10)
+
+$managerTextbox = New-Object System.Windows.Forms.TextBox
+$managerTextbox.Location = New-Object System.Drawing.Point(110, 200)
+$managerTextbox.Size = New-Object System.Drawing.Size(260, 20)     
+$form.Controls.Add($managerTextbox)
+
 
 $label4 = New-Object System.Windows.Forms.Label
 $label4.Location = New-Object System.Drawing.Point(10, 110)
@@ -117,15 +238,16 @@ $emailTextbox.ReadOnly = $true  # Set the email textbox to read-only
 $form.Controls.Add($emailTextbox)
 
 $label5 = New-Object System.Windows.Forms.Label
-$label5.Location = New-Object System.Drawing.Point(10, 140)
+$label5.Location = New-Object System.Drawing.Point(10, 260)
 $label5.Size = New-Object System.Drawing.Size(100, 20)
 $label5.Text = "Office:"
 $form.Controls.Add($label5)
 
 $officeTextbox = New-Object System.Windows.Forms.TextBox
-$officeTextbox.Location = New-Object System.Drawing.Point(110, 140)
+$officeTextbox.Location = New-Object System.Drawing.Point(110, 260)
 $officeTextbox.Size = New-Object System.Drawing.Size(260, 20)
 $form.Controls.Add($officeTextbox)
+
 
 $label6 = New-Object System.Windows.Forms.Label
 $label6.Location = New-Object System.Drawing.Point(10, 170)
@@ -134,19 +256,86 @@ $label6.Text = "Title:"
 $form.Controls.Add($label6)
 
 
+$label9 = New-Object System.Windows.Forms.Label
+$label9.Location = New-Object System.Drawing.Point(10, 80)  
+$label9.Size = New-Object System.Drawing.Size(100, 25)       
+$label9.Text = "Employee Number:"
+$form.Controls.Add($label9)
+
+$employeeNumberTextbox = New-Object System.Windows.Forms.TextBox
+$employeeNumberTextbox.Location = New-Object System.Drawing.Point(110, 80) 
+$employeeNumberTextbox.Size = New-Object System.Drawing.Size(260, 20)         
+$employeeNumberTextbox.ReadOnly = $true  # set ReadOnly property to true
+$form.Controls.Add($employeeNumberTextbox)
+
+# Add the event handler to allow only digits, backspace, delete, and numeric keys in the employee number textbox
+$timer = New-Object System.Windows.Forms.Timer
+$timer.Interval = 1000  # 1000 milliseconds = 1 second
+$timer.Enabled = $false
+
+$employeeNumberTextbox.add_KeyDown({
+    $keyCode = $_.KeyCode
+
+    # Allow digits, backspace, delete, numeric keys, and arrow keys
+    if ($keyCode -ge 'D0' -and $keyCode -le 'D9' -or 
+        $keyCode -eq 'Back' -or $keyCode -eq 'Delete' -or
+        ($keyCode -ge 'NumPad0' -and $keyCode -le 'NumPad9') -or
+        ($keyCode -ge 'Left' -and $keyCode -le 'Down')) {
+        
+        # Check if the length of the entered employee number is not more than 4 digits
+        if ($employeeNumberTextbox.Text.Length -gt 4) {
+            [System.Windows.Forms.MessageBox]::Show("Length of employee number should not be more than 4 digits.")
+            $employeeNumberTextbox.Text = $employeeNumberTextbox.Text.Substring(0, 4)
+        }
+        else {
+            # Stop the timer
+            $timer.Stop()
+
+            # Start the timer
+            $timer.Start()
+        }
+    }
+    else {
+        $_.SuppressKeyPress = $true
+    }
+})
+
+$timer.add_Tick({
+    # Stop the timer
+    $timer.Stop()
+
+    # Check if the employeeNumberTextbox is ReadOnly
+    if (-not $employeeNumberTextbox.ReadOnly) {
+        # Check if the entered employee number is already in use by another employee
+        $searcher = New-Object System.DirectoryServices.DirectorySearcher
+        $employeeNumberText = $($employeeNumberTextbox.Text).TrimStart('0')
+        $searcher.Filter = "(&(objectCategory=person)(objectClass=user)(employeeNumber=$($employeeNumberText)))"
+        $result = $searcher.FindOne()
+
+        if ($result) {
+            $employeeName = $result.Properties["displayName"][0]
+            $allNumbersInUse = @($searcher.FindAll() | ForEach-Object { $_.Properties["employeeNumber"][0] })
+            $suggestedNumber = Get-AvailableEmployeeNumber -EmployeeNumber $employeeNumberText -AllNum $allNumbersInUse
+            [System.Windows.Forms.MessageBox]::Show("Employee number $($employeeNumberTextbox.Text) is already in use by $employeeName. Please use another employee number. Next available employee number is $suggestedNumber.")
+            $employeeNumberTextbox.Text = $suggestedNumber
+        }
+    }
+})
+
+
 $titleTextbox = New-Object System.Windows.Forms.TextBox
 $titleTextbox.Location = New-Object System.Drawing.Point(110, 170)
 $titleTextbox.Size = New-Object System.Drawing.Size(260, 20)
 $form.Controls.Add($titleTextbox)
 
 $label7 = New-Object System.Windows.Forms.Label
-$label7.Location = New-Object System.Drawing.Point(10, 200)
+$label7.Location = New-Object System.Drawing.Point(10, 140)
 $label7.Size = New-Object System.Drawing.Size(100, 20)
-$label7.Text = "Phone Number:"
+$label7.Text = "Phone number:"
 $form.Controls.Add($label7)
 
 $phoneTextbox = New-Object System.Windows.Forms.TextBox
-$phoneTextbox.Location = New-Object System.Drawing.Point(110, 200)
+$phoneTextbox.Location = New-Object System.Drawing.Point(110, 140)
 $phoneTextbox.Size = New-Object System.Drawing.Size(260, 20)
 
 # Add the event handler to allow only digits, backspace, delete, and numeric keys in the phone number textbox
@@ -179,17 +368,30 @@ $sipTextbox.Size = New-Object System.Drawing.Size(260, 20)
 $sipTextbox.ReadOnly = $true
 $form.Controls.Add($sipTextbox)
 
-$label9 = New-Object System.Windows.Forms.Label
-$label9.Location = New-Object System.Drawing.Point(10, 260)
-$label9.Size = New-Object System.Drawing.Size(100, 20)
-$label9.Text = "Groups:"
-$form.Controls.Add($label9)
+$label12 = New-Object System.Windows.Forms.Label
+$label12.Location = New-Object System.Drawing.Point(10, 320)
+$label12.Size = New-Object System.Drawing.Size(100, 20)
+$label12.Text = "Distribution Group:"
+$form.Controls.Add($label12)
 
-$groupsTextbox = New-Object System.Windows.Forms.TextBox
-$groupsTextbox.Location = New-Object System.Drawing.Point(110, 260)
-$groupsTextbox.Size = New-Object System.Drawing.Size(260, 20)
-$groupsTextbox.ReadOnly = $true
-$form.Controls.Add($groupsTextbox)
+$distGroupsTextbox = New-Object System.Windows.Forms.TextBox
+$distGroupsTextbox.Location = New-Object System.Drawing.Point(110, 320)
+$distGroupsTextbox.Size = New-Object System.Drawing.Size(260, 20)
+$distGroupsTextbox.ReadOnly = $true
+$form.Controls.Add($distGroupsTextbox)
+
+
+$label11 = New-Object System.Windows.Forms.Label
+$label11.Location = New-Object System.Drawing.Point(10, 290)
+$label11.Size = New-Object System.Drawing.Size(100, 20)
+$label11.Text = "Security Groups:"
+$form.Controls.Add($label11)
+
+$secGroupsTextbox = New-Object System.Windows.Forms.TextBox
+$secGroupsTextbox.Location = New-Object System.Drawing.Point(110, 290)
+$secGroupsTextbox.Size = New-Object System.Drawing.Size(260, 20)
+$secGroupsTextbox.ReadOnly = $true
+$form.Controls.Add($secGroupsTextbox)
 
 # Disable all form controls
 $form.Controls | ForEach-Object {
@@ -204,111 +406,108 @@ $officeTextbox.Text = ""
 $titleTextbox.Text = ""
 $phoneTextbox.Text = ""
 $sipTextbox.Text = ""
-$groupsTextbox.Text = ""
 
-
-
-# Enable the "Search" button and the "Username" textbox
-$searchButton.Enabled = $true
-$usernameTextbox.Enabled = $true
-
-# Create the "Enable User" checkbox
-$enableCheckbox = New-Object System.Windows.Forms.CheckBox
-$enableCheckbox.Location = New-Object System.Drawing.Point(110, 290)
-$enableCheckbox.Size = New-Object System.Drawing.Size(100, 20)
-$enableCheckbox.Text = "Enable User"
-$enableCheckbox.Enabled = $false
-$form.Controls.Add($enableCheckbox)
-
-# Create the "Disable User" checkbox
-$disableCheckbox = New-Object System.Windows.Forms.CheckBox
-$disableCheckbox.Location = New-Object System.Drawing.Point(220, 290)
-$disableCheckbox.Size = New-Object System.Drawing.Size(100, 20)
-$disableCheckbox.Text = "Disable User"
-$disableCheckbox.Enabled = $false
-$form.Controls.Add($disableCheckbox)
-
-# Add event handlers for the checkboxes
-$enableCheckbox.Add_CheckedChanged({
-    if ($enableCheckbox.Checked) {
-        $disableCheckbox.Checked = $false
-    }
-})
-
-$disableCheckbox.Add_CheckedChanged({
-    if ($disableCheckbox.Checked) {
-        $enableCheckbox.Checked = $false
-    }
-})
 
 
 $updateButton = New-Object System.Windows.Forms.Button
-$updateButton.Location = New-Object System.Drawing.Point(100, 310)
+$updateButton.Location = New-Object System.Drawing.Point(100, 430)
 $updateButton.Size = New-Object System.Drawing.Size(100, 30)
 $updateButton.Text = "Update"
 $updateButton.Enabled = $false
+
+
 $updateButton.Add_Click({
     $username = $usernameTextbox.Text
-    $fullName = $fullNameTextbox.Text
-    $description = $descriptionTextbox.Text
-    $email = $emailTextbox.Text
-    $office = $officeTextbox.Text
-    $title = $titleTextbox.Text
-    $phone = $phoneTextbox.Text
-    $sip = $sipTextbox.Text
-
-    $user = Get-ADUser -Identity $username
-    if ($user) {
-        $params = @{
-            'Identity' = $user
-        }
-
-        if ($fullName) {
-            $params.Add('DisplayName', $fullName)
-        }
-
-        if ($description) {
-            $params.Add('Description', $description)
-        }
-
-        if ($email) {
-            $params.Add('EmailAddress', $email)
-        }
-
-        if ($office) {
-            $params.Add('Office', $office)
-        }
-
-        if ($title) {
-            if ($user.Title) {
-                $params.Add('Title', $title)
-            } else {
-                $params.Add('Title', $title)
-            }
-        }
-
-        if ($phone) {
-            if ($user.OfficePhone) {
-                $params.Add('OfficePhone', $user.OfficePhone + ', ' + $phone)
-            }
-            else {
-                $params.Add('OfficePhone', $phone)
-            }
-        }
-
-        if ($enableCheckbox.Checked) {
-            $params.Add('Enabled', $true)
-        }
-
-        if ($disableCheckbox.Checked) {
-            $params.Add('Enabled', $false)
-        }
-
-        Set-ADUser @params
-        [System.Windows.Forms.MessageBox]::Show("User info updated successfully.")
+    
+    if ([string]::IsNullOrEmpty($username)) {
+        [System.Windows.Forms.MessageBox]::Show("Please enter a username.")
     }
     else {
-        [System.Windows.Forms.MessageBox]::Show("User not found.")
+        try {
+            $user = Get-ADUser -Identity $username -Properties DisplayName, Description, EmailAddress, Office, Title, TelephoneNumber, msRTCSIP-PrimaryUserAddress, Enabled, MemberOf, EmployeeNumber, Manager
+            
+            if ($user) {
+                $params = @{
+                    'Identity' = $user
+                }
+                
+                $userDisplayName = $fullNameTextbox.Text
+                $userDescription = $descriptionTextbox.Text
+                $userEmail = $emailTextbox.Text
+                $userEmployeeNumber = $employeeNumberTextbox.Text
+                $userManager = $managerTextbox.Text
+                $userOffice = $officeTextbox.Text
+                $userTitle = $titleTextbox.Text
+                $userPhone = $phoneTextbox.Text
+                
+                
+                if (![string]::IsNullOrEmpty($userDisplayName)) {
+                    $params.Add('DisplayName', $userDisplayName)
+                }
+                
+                if (![string]::IsNullOrEmpty($userDescription)) {
+                    $params.Add('Description', $userDescription)
+                }
+                
+                if (![string]::IsNullOrEmpty($userEmail)) {
+                    $params.Add('EmailAddress', $userEmail)
+                }
+                
+                if (![string]::IsNullOrEmpty($userEmployeeNumber)) {
+                    $params.Add('EmployeeNumber', $userEmployeeNumber)
+                }
+                
+                if (![string]::IsNullOrEmpty($userOffice)) {
+                    $params.Add('Office', $userOffice)
+                }
+                
+                if (![string]::IsNullOrEmpty($userTitle)) {
+                    $params.Add('Title', $userTitle)
+                }
+                
+                if (![string]::IsNullOrEmpty($userPhone)) {
+                    $params.Add('OfficePhone', $userPhone)
+                }
+                
+                if ($enableCheckbox.Checked) {
+                    $params.Add('Enabled', $true)
+                }
+                
+                if ($disableCheckbox.Checked) {
+                    $params.Add('Enabled', $false)
+                }
+                
+                if ($distGroups) {
+                    $params.Add('MemberOf', $distGroups)
+                }
+                
+                if ($secGroups) {
+                    $params.Add('MemberOf', $secGroups)
+                }
+                
+                # Check if the Manager field needs to be updated
+                if (![string]::IsNullOrEmpty($userManager) -and $userManager -ne $user.Manager) {
+                    $newManager = Get-ADUser -Filter "DisplayName -eq '$userManager' -or SamAccountName -eq '$userManager'" -Properties DisplayName, SamAccountName, DistinguishedName -ErrorAction Stop
+                    if (!$newManager) {
+                        [System.Windows.Forms.MessageBox]::Show("Manager not found.")
+                        return
+                    }
+                    $params.Add('Manager', $newManager.DistinguishedName)
+                }
+                
+                Set-ADUser @params
+                [System.Windows.Forms.MessageBox]::Show("User information updated successfully.")
+            }
+            else {
+                [System.Windows.Forms.MessageBox]::Show("User not found.")
+            }
+        }
+        catch [Microsoft.ActiveDirectory.Management.ADIdentityNotFoundException] {
+            [System.Windows.Forms.MessageBox]::Show("The user entered in the Manager field was not found.")
+        }
+        catch {
+            [System.Windows.Forms.MessageBox]::Show($_.Exception.Message)
+        }
     }
 })
 
@@ -320,7 +519,7 @@ $form.Controls.Add($updateButton)
 
 # Add the "Cancel" button to the form
 $cancelButton = New-Object System.Windows.Forms.Button
-$cancelButton.Location = New-Object System.Drawing.Point(220,310)
+$cancelButton.Location = New-Object System.Drawing.Point(220,430)
 $cancelButton.Size = New-Object System.Drawing.Size(100, 30)
 $cancelButton.Text = "Cancel"
 $cancelButton.Add_Click({
@@ -330,7 +529,7 @@ $form.Controls.Add($cancelButton)
 
 # Add the "Reset" button to the form
 $resetButton = New-Object System.Windows.Forms.Button
-$resetButton.Location = New-Object System.Drawing.Point(340, 310)
+$resetButton.Location = New-Object System.Drawing.Point(340, 430)
 $resetButton.Size = New-Object System.Drawing.Size(100, 30)
 $resetButton.Text = "Reset"
 $resetButton.Add_Click({
@@ -352,8 +551,11 @@ $resetButton.Add_Click({
         $officeTextbox.Text = ""
         $titleTextbox.Text = ""
         $phoneTextbox.Text = ""
+        $distGroupsTextbox.Text = ""
+        $managerTextbox.Text = ""
+        $employeeNumberTextbox.Text = ""
+        $secGroupsTextbox.Text = "" 
         $sipTextbox.Text = ""
-        $groupsTextbox.Text = ""
         $enableCheckbox.Checked = $false
         $disableCheckbox.Checked = $false
         $enableCheckbox.Enabled = $false
@@ -365,4 +567,3 @@ $form.Controls.Add($resetButton)
 
 # Display the form
 $form.ShowDialog() | Out-Null
-
