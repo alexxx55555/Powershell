@@ -519,7 +519,7 @@ while (-not $groupsCopied) {
     Employess number: $employeeNumber
     Username: $username 
     Manager: $($manager.GivenName) $($manager.Surname)
-    Office Location: $office 
+    Office Location: $officeLocation 
     OfficePhone: $officePhone 
     E-mail: $email 
     Sip: $SFB
