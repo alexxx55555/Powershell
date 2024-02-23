@@ -421,7 +421,7 @@ $adUserParams = @{
     SamAccountName     = $username
     AccountPassword    = (ConvertTo-SecureString $password -AsPlainText -Force)
     Path               = $ADPath
-    Office             = $officeLocation  # Added office location parameter
+    Office             = $officeLocation  
     OfficePhone        = $officePhone
     Enabled            = $true
     Title              = $jobTitle
@@ -549,7 +549,7 @@ while (-not $groupsCopied) {
     <p><b><font color='black'><h4>Employee Number: $employeeNumber </b></p></font></h4></b>
     <p><b><font color='black'><h4>Username: $username </b></p></font></h4></b>
     <p><b><font color='black'><h4>Manager: $($manager.GivenName) $($manager.Surname) </b></p></font></h4></b>
-    <p><b><font color='black'><h4>Office Location: $office </b></p></font></h4></b>
+    <p><b><font color='black'><h4>Office Location: $officeLocation </b></p></font></h4></b>
     <p><b><font color='black'><h4>OfficePhone: $officePhone </b></p></font></h4></b>
     <p><b><font color='black'><h4>E-mail: $email </b></p></font></h4></b>
     <p><b><font color='black'><h4>Sip: $SFB</b></p></font></h4></b>
