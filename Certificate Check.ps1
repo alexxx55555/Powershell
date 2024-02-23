@@ -1,4 +1,5 @@
-﻿Write-Host $env:COMPUTERNAME -ForegroundColor Magenta
+﻿Write-Warning "'Please Run This Script Using Administrator User!"
+Write-Host $env:COMPUTERNAME -ForegroundColor Magenta
 $startTime=Get-Date;
 
 Write-Host "Check #1 – Misplaced certificates in Trusted Root CA" -ForegroundColor Cyan
