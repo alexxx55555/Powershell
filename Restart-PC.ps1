@@ -1,46 +1,81 @@
-﻿# Prompt the user to enter the computer name or IP address
-$computer = Read-Host -Prompt "Enter Computer Name or IP Address"
+﻿$computerName = Read-Host -Prompt "Enter Host Name"
 
-# Try to resolve the DNS name or IP address of the computer
-if ($computer -as [ipaddress]) {
-    # If the user entered an IP address, use it directly
-    $computerIP = $computer
+$errormsg = $true
+
+try{
+
+    $computerIP = Resolve-DnsName "$computerName.alex.local" -DnsOnly -ErrorAction Stop | select -ExpandProperty IPAddress
+
 }
-else {
-    # Otherwise, try to resolve the DNS name of the computer
-    try {
-        $computerIP = Resolve-DnsName -Name "$computer.alex.local" -DnsOnly -ErrorAction Stop |
-                      Select-Object -ExpandProperty IPAddress
+
+catch [System.ComponentModel.Win32Exception]{
+
+    Write-warning "Cannot Resolve hostname."
+
+    $errormsg = $false
+
+ 
+
+}
+
+ 
+
+if($errormsg){
+
+    $Error.clear()
+
+    $adminCreds = Get-Credential $vinokura
+
+ 
+
+    try{
+
+        Write-Host "Trying to restart $computerName ..." -ForegroundColor Cyan
+
+        Restart-Computer -ComputerName $computerIP -Credential $adminCreds -Force -ErrorAction Stop
+
     }
-    catch {
-        Write-Warning "Cannot resolve hostname."
+
+    catch{
+
+        if($Error[0] -like "*Access is denied*"){
+
+            Write-warning "Wrong Credentials."
+
+        }
+
+        elseif($Error[0] -like "*cannot be resolved*"){
+
+            Write-warning "Cannot Resolve hostname."
+
+ 
+
+        }
+
+        elseif($Error[0] -like "*RPC server*"){
+
+            Write-warning "Check the machine connection."
+
+        }
+
+        Read-Host -Prompt "Press Enter to exit" 
+
+    }
+
+    if(!$Error[0]){
+
+        Write-Host "Restarting Machine" -ForegroundColor Green
+
+
         Read-Host -Prompt "Press Enter to exit"
-        exit
+
     }
+
+ 
+
 }
 
-# Get the credentials of the administrator
-$adminCreds = Get-Credential -Credential "alex\$env:USERNAME"
 
-# Restart the computer
-try {
-    Write-Output "Trying to restart $computer ..."
-    $params = @{
-        ComputerName = $computerIP
-        Credential   = $adminCreds
-        Force        = $true
-        ErrorAction  = 'Stop'
-    }
-    Restart-Computer @params
-    Write-Output "Restarting machine"
-    
-}
-catch {
-    switch -regex ($Error[0].Exception.Message) {
-        "Access is denied" { Write-Warning "Wrong credentials." }
-        "cannot be resolved" { Write-Warning "Cannot resolve hostname." }
-        "RPC server" { Write-Warning "Check the machine connection." }
-        default { Write-Warning "An error occurred: $($_.Exception.Message)" }
-    }
+ 
 
-    }
+ 

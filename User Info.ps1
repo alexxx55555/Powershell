@@ -92,13 +92,11 @@ $form.Controls.Add($searchButton)
 
 $searchButton.Add_Click({
     $username = $usernameTextbox.Text
+    Check-EmployeeNumberAttribute -Username $username
 
-    # Check if username is not empty before proceeding
     if ([string]::IsNullOrEmpty($username)) {
         [System.Windows.Forms.MessageBox]::Show("Please enter a username.")
-        return  # Exit the event handler if username is empty
     }
-
     else {
         try {
             $user = Get-ADUser -Identity $username -Properties DisplayName, Description, EmailAddress, Office, Title, TelephoneNumber, msRTCSIP-PrimaryUserAddress, Enabled, MemberOf,  EmployeeNumber, Manager 
