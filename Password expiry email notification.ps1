@@ -2,11 +2,11 @@
 $SearchBase="OU=Users,OU=Alex,DC=alex,DC=local"
 $ExcludeList="'New Employees'|'Separated Employees'"   #in the form of "SubOU1|SubOU2|SubOU3" -- possibly needing single quote for OU's with spaces, separate OU's with pipe and double-quote the list.
 $smtpServer="EX2019.alex.local"
-$expireindays = 42 #number of days of soon-to-expire paswords. i.e. notify for expiring in X days (and every day until $negativedays)
+$expireindays = 7 #number of days of soon-to-expire paswords. i.e. notify for expiring in X days (and every day until $negativedays)
 $negativedays = -3 #negative number of days (days already-expired). i.e. notify for expired X days ago
 $from = "Administrator <ITRobot@alex.com>"
-$logging = $false # Set to $false to Disable Logging
-$logNonExpiring = $false
+$logging = $true # Set to $false to Disable Logging
+$logNonExpiring = $true # Set to $false to Disable Logging
 $logFile = "c:\PS-pwd-expiry.csv" # ie. c:\mylog.csv
 $adminEmailAddr = "vinokura@alex.com" #multiple addr allowed but MUST be independent strings separated by comma
 $sampleEmails = 3 
