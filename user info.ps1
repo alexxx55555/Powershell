@@ -38,7 +38,6 @@ function Check-EmployeeNumberAttribute {
     }
 }
 
-
 # Function to get the next available employee number
 function Get-AvailableEmployeeNumber {
     param(
@@ -148,6 +147,9 @@ $secGroupsTextbox.Text = $secGroups
                 $form.Controls | ForEach-Object {
                     $_.Enabled = $true
                 }
+
+                # Check the EmployeeNumber attribute and set the ReadOnly property of the employee number textbox
+                Check-EmployeeNumberAttribute -Username $username
             }
             else {
                 [System.Windows.Forms.MessageBox]::Show("User not found.")
