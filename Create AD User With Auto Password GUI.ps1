@@ -5,14 +5,6 @@ $ProgressPreference = 'SilentlyContinue'
 $s = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri http://ex2019.alex.local/powershell 
 Import-PSSession -session $s -AllowClobber -DisableNameChecking | Out-Null
 
-# Import SFB Module
-$pass = Get-Content "C:\test\Password.txt" | ConvertTo-SecureString
-$user = "vinokura"
-$Credentials = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $user, $pass
-
-$SkypeSession = New-PSSession -Credential $Credentials -ConnectionURI https://Skype-Server.alex.local/OcsPowershell 
-Import-PSSession $SkypeSession -AllowClobber -DisableNameChecking | Out-Null
-
 # Reset progress preference if needed
 $ProgressPreference = 'Continue'
 
@@ -389,9 +381,9 @@ $password = Get-RandomCharacters -length 2 -characters 'abcdefghiklmnoprstuvwxyz
         $username = $username.ToLower()
     }
 
-    # Generate email and Skype for Business addresses based on the username
+    # Generate email addresses based on the username
     $email = $username + "@alex.com" 
-    $SFB = $username + "@alex.local" 
+    
 
   # Check Manager in AD
         $manager = Check-ManagerInAD -managerUsername $managerUsername -managerFullName $managerFullName
@@ -506,10 +498,7 @@ while (-not $groupsCopied) {
     # Create Mailbox
     Get-User -OrganizationalUnit alex.local/alex/users/ -RecipientTypeDetails user | Enable-Mailbox | Out-Null
 
-    # Create SFB Account
-    Enable-CsUser -Identity $username -RegistrarPool "Skype-Server.alex.local" -SipAddressType SamAccountName -SipDomain "alex.local" 
-    
-
+   
     # Construct and display a detailed message to verify the new user's details
     $subject = "New Users Created"
     $Message = @"
@@ -520,9 +509,8 @@ while (-not $groupsCopied) {
     Username: $username 
     Manager: $($manager.GivenName) $($manager.Surname)
     Office Location: $officeLocation 
-    OfficePhone: $officePhone 
+    Office Phone: $officePhone 
     E-mail: $email 
-    Sip: $SFB
     DL Groups Copied: $($copiedDLGroups -join ', ')
     Security Groups Copied: $($copiedSecurityGroups -join ', ')
     Initial Password: $password
@@ -552,7 +540,6 @@ while (-not $groupsCopied) {
     <p><b><font color='black'><h4>Office Location: $officeLocation </b></p></font></h4></b>
     <p><b><font color='black'><h4>OfficePhone: $officePhone </b></p></font></h4></b>
     <p><b><font color='black'><h4>E-mail: $email </b></p></font></h4></b>
-    <p><b><font color='black'><h4>Sip: $SFB</b></p></font></h4></b>
     <p><b><font color='black'><h4>Groups: $($SelectedGroups -join ",")</b></p></font></h4></b>
     <p><b><font color='black'><h4>DL Groups Copied: $($copiedDLGroups -join ', ')</b></p></font></h4></b>
     <p><b><font color='black'><h4>Security Groups Copied: $($copiedSecurityGroups -join ', ')</b></p></font></h4></b>
