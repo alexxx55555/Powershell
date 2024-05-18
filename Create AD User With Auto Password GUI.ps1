@@ -70,8 +70,6 @@ function Get-AvailableEmployeeNumber {
     # Check if the employee number is already in use
     $existingUser = Get-ADUser -Filter {EmployeeNumber -eq $EmployeeNumber}
     if ($existingUser) {
-
-        
        [void][System.Windows.Forms.MessageBox]::Show("EmployeeNumber '$EmployeeNumber' is already in use by $($existingUser.SamAccountName)", "Employee Number In Use")
        # Find the next available employee number
         while ($AllNum -contains $EmployeeNumber) {
@@ -81,7 +79,6 @@ function Get-AvailableEmployeeNumber {
         [void][System.Windows.Forms.MessageBox]::Show("Next available employee number is '$EmployeeNumber'", "Available Employee Number")
     }
     # If the employee number is available, do not show any message
-    
     return $EmployeeNumber
 }
 
@@ -140,8 +137,6 @@ function Combined_KeyPress {
     }
 }
 
-
-
 # Function to check for the existence of a source user in Active Directory
 function Check-SourceUserInAD {
     param (
@@ -158,12 +153,8 @@ function Check-SourceUserInAD {
     return $null
 }
 
-
-
-#User creation path
+# User creation path
 $ADPath = "OU=Users,OU=Alex,DC=alex,DC=local"
-
-
 
 # GUI Windows code
 $main_form = New-Object System.Windows.Forms.Form
@@ -174,7 +165,6 @@ $main_form.AutoSize = $true
 
 # Set the form border style to FixedSingle to prevent resizing
 $main_form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedSingle
-
 
 # Load and display the company logo
 $img =  [System.Drawing.Image]::Fromfile('\\dc1\Applications\alex.jpg')
@@ -241,7 +231,7 @@ $managerTextBox.Width = 100
 $managerTextBox.Location = New-Object System.Drawing.Point(110, 180)
 $main_form.Controls.Add($managerTextBox)
 
-#Create a label for the Phone field
+# Create a label for the Phone field
 $PhoneLabel = New-Object System.Windows.Forms.Label
 $PhoneLabel.Text = "Phone"
 $PhoneLabel.Location = New-Object System.Drawing.Point(10, 210)
@@ -322,55 +312,65 @@ $CancelButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
 $main_form.CancelButton = $CancelButton
 $main_form.Controls.Add($CancelButton)
 
-
-   # Initialize variable to store the employee number
-    $employeeNumber = $null
+# Initialize variable to store the employee number
+$employeeNumber = $null
 
 # Retrieve all employee numbers from Active Directory before showing the form
 $allEmployeeNumbers = Get-ADUser -Filter * -Properties EmployeeNumber | Select-Object -ExpandProperty EmployeeNumber
 
+# Start of the manager verification loop
+do {
+    $managerFound = $false
 
-  # Start of the manager verification loop
-    do {
-        $managerFound = $false
+    # Show GUI
+    $result = $main_form.ShowDialog()
 
-        # Show GUI
-        $result = $main_form.ShowDialog()
+    if ($result -eq [System.Windows.Forms.DialogResult]::Cancel) {
+        [System.Windows.Forms.MessageBox]::Show("New user creation cancelled!", "New User Creation Result", "Ok", "Information")
+        exit
+    }
 
-        if ($result -eq [System.Windows.Forms.DialogResult]::Cancel) {
-            [System.Windows.Forms.MessageBox]::Show("New user creation cancelled!", "New User Creation Result", "Ok", "Information")
-            exit
-        }
+    # Check for available employee number only if it hasn't been set
+    if ($null -eq $employeeNumber) {
+        $enteredEmployeeNumber = [int]$employeeNumberTextBox.Text
+        $employeeNumber = Get-AvailableEmployeeNumber -EmployeeNumber $enteredEmployeeNumber -AllNum $allEmployeeNumbers
+    }
 
- # Check for available employee number only if it hasn't been set
-        if ($null -eq $employeeNumber) {
-            $enteredEmployeeNumber = [int]$employeeNumberTextBox.Text
-            $employeeNumber = Get-AvailableEmployeeNumber -EmployeeNumber $enteredEmployeeNumber -AllNum $allEmployeeNumbers
-        }
+    # Gather user input from the form
+    $firstname = $firstNameTextBox.Text
+    $lastname = $lastNameTextBox.Text
+    $jobTitle = $jobTitleTextBox.Text
+    $managerUsername = $managerTextBox.Text
+    $officePhone = $PhoneLabelTextBox.Text
+    $officeLocation = $officeLocationTextBox.Text
+    $sourceUsername = $copyGroupsTextBox.Text
 
-# Gather user input from the form
-$firstname = $firstNameTextBox.Text
-$lastname = $lastNameTextBox.Text
-$jobTitle = $jobTitleTextBox.Text
-$managerUsername = $managerTextBox.Text
-#$employeeNumber = Get-AvailableEmployeeNumber -EmployeeNumber ([int]$employeeNumberTextBox.Text) -AllNum $allEmployeeNumbers
-$officePhone = $PhoneLabelTextBox.Text
-$officeLocation = $officeLocationTextBox.Text
-$selectedGroups = @($userGroupsListBox.CheckedItems)
+    # Check if any required fields are empty
+    if ([string]::IsNullOrWhiteSpace($firstname) -or
+        [string]::IsNullOrWhiteSpace($lastname) -or
+        [string]::IsNullOrWhiteSpace($jobTitle) -or
+        [string]::IsNullOrWhiteSpace($managerUsername) -or
+        [string]::IsNullOrWhiteSpace($officePhone) -or
+        [string]::IsNullOrWhiteSpace($officeLocation) -or
+        [string]::IsNullOrWhiteSpace($sourceUsername) -or
+        [string]::IsNullOrWhiteSpace($EmployeeNumberTextBox.Text)) {
+        [void][System.Windows.Forms.MessageBox]::Show("All fields are required. Please fill in all details.", "Incomplete Details", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        continue
+    }
 
-# Generate a random password 
-$password = Get-RandomCharacters -length 2 -characters 'abcdefghiklmnoprstuvwxyz'
+    # Generate a random password 
+    $password = Get-RandomCharacters -length 2 -characters 'abcdefghiklmnoprstuvwxyz'
     $password += Get-RandomCharacters -length 1 -characters 'ABCDEFGHKLMNOPRSTUVWXYZ'
     $password += Get-RandomCharacters -length 1 -characters '1234567890'
-    $password += Get-RandomCharacters -length 1 -characters '!"$%&/()=?}][{@#*+'  
+    $password += Get-RandomCharacters -length 1 -characters '!"$%&/()=?}][{@#*+'
 
     # Set username
     $i = 1
     $basename = $firstname
     $username = $basename + $lastName.Substring(0,$i)
     $username = $username.ToLower()
-   
-   # Generate a unique username by appending a number if necessary
+
+    # Generate a unique username by appending a number if necessary
     while ((Get-ADUser -filter {SamAccountName -eq $username}).SamAccountName -eq $username){
         if($i -gt $lastName.Length){
             # update the basename and reset $i
@@ -382,130 +382,125 @@ $password = Get-RandomCharacters -length 2 -characters 'abcdefghiklmnoprstuvwxyz
     }
 
     # Generate email addresses based on the username
-    $email = $username + "@alex.com" 
-    
+    $email = $username + "@alex.com"
 
-  # Check Manager in AD
-        $manager = Check-ManagerInAD -managerUsername $managerUsername -managerFullName $managerFullName
+    # Check Manager in AD
+    $manager = Check-ManagerInAD -managerUsername $managerUsername -managerFullName $managerFullName
 
-        if ($null -eq $manager) {
-            [void][System.Windows.Forms.MessageBox]::Show("Manager not found in Active Directory. Please check the manager's username or full name.", "Manager Not Found")
-            # Reset the manager field for new input
-            $managerTextBox.Text = ""
-        } else {
-            $managerFound = $true
-        }
-    } while (-not $managerFound)
+    if ($null -eq $manager) {
+        [void][System.Windows.Forms.MessageBox]::Show("Manager not found. Please check the manager's username or full name.", "Manager Not Found")
+        # Reset the manager field for new input
+        $managerTextBox.Text = ""
+        continue
+    } else {
+        $managerFound = $true
+    }
+} while (-not $managerFound)
 
 if ($null -eq $manager) {
     [System.Windows.Forms.MessageBox]::Show("Manager not found in Active Directory. Please check the manager's username or full name.", "Manager Not Found")
     return
 }
-  if ($managerFound) {
 
-# Define common parameters for New-ADUser cmdlet
-$adUserParams = @{
-    GivenName          = $firstname
-    Surname            = $lastname
-    EmployeeNumber     = $employeeNumber  
-    Displayname        = "$FirstName $lastname"
-    UserPrincipalName  = $email
-    SamAccountName     = $username
-    AccountPassword    = (ConvertTo-SecureString $password -AsPlainText -Force)
-    Path               = $ADPath
-    Office             = $officeLocation  
-    OfficePhone        = $officePhone
-    Enabled            = $true
-    Title              = $jobTitle
-    Manager            = $manager.DistinguishedName
-}
+if ($managerFound) {
 
-# Check if the user already exists with the given first and last name
-$userExists = Get-ADUser -Filter "surname -eq '$lastname' -and givenname -eq '$firstname'"
+    # Define common parameters for New-ADUser cmdlet
+    $adUserParams = @{
+        GivenName          = $firstname
+        Surname            = $lastname
+        EmployeeNumber     = $employeeNumber  
+        Displayname        = "$FirstName $lastname"
+        UserPrincipalName  = $email
+        SamAccountName     = $username
+        AccountPassword    = (ConvertTo-SecureString $password -AsPlainText -Force)
+        Path               = $ADPath
+        Office             = $officeLocation  
+        OfficePhone        = $officePhone
+        Enabled            = $true
+        Title              = $jobTitle
+        Manager            = $manager.DistinguishedName
+    }
 
-# Modify parameters if user exists
-if ($userExists) {
-    $adUserParams['Name'] = "$firstname $lastname ($employeeNumber)"
-}
-else {
-    $adUserParams['Name'] = "$firstname $lastname"
-}
+    # Check if the user already exists with the given first and last name
+    $userExists = Get-ADUser -Filter "surname -eq '$lastname' -and givenname -eq '$firstname'"
 
+    # Modify parameters if user exists
+    if ($userExists) {
+        $adUserParams['Name'] = "$firstname $lastname ($employeeNumber)"
+    }
+    else {
+        $adUserParams['Name'] = "$firstname $lastname"
+    }
 
+    # Create the AD User
+    New-ADUser @adUserParams
 
-# Create the AD User
-New-ADUser @adUserParams
+    # Initialize arrays to store copied groups
+    $copiedDLGroups = @()
+    $copiedSecurityGroups = @()
 
-# Initialize arrays to store copied groups
-$copiedDLGroups = @()
-$copiedSecurityGroups = @()
+    # Retrieve the source username from the form
+    $sourceUsername = $copyGroupsTextBox.Text
+    $groupsCopied = $false
 
-# Retrieve the source username from the form
-$sourceUsername = $copyGroupsTextBox.Text
-$groupsCopied = $false
+    # Loop until groups are copied
+    while (-not $groupsCopied) {
+        $sourceUser = Check-SourceUserInAD -sourceUsername $sourceUsername
 
-# Loop until groups are copied
-while (-not $groupsCopied) {
-    $sourceUser = Check-SourceUserInAD -sourceUsername $sourceUsername
+        if ($null -eq $sourceUser) {
+            [void][System.Windows.Forms.MessageBox]::Show("Source user '$sourceUsername' not found. Please check the name.", "Source User Not Found", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+            $copyGroupsTextBox.Text = ""
+            $result = $main_form.ShowDialog()
 
-    if ($null -eq $sourceUser) {
-        [void][System.Windows.Forms.MessageBox]::Show("Source user '$sourceUsername' not found in Active Directory. Please check the username.", "Source User Not Found", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
-        $copyGroupsTextBox.Text = ""
-        $result = $main_form.ShowDialog()
+            if ($result -eq [System.Windows.Forms.DialogResult]::Cancel) {
+                [System.Windows.Forms.MessageBox]::Show("New user creation cancelled!", "New User Creation Result", "Ok", "Information")
+                exit
+            }
 
-        if ($result -eq [System.Windows.Forms.DialogResult]::Cancel) {
-            [System.Windows.Forms.MessageBox]::Show("New user creation cancelled!", "New User Creation Result", "Ok", "Information")
-            exit
-        }
+            $sourceUsername = $copyGroupsTextBox.Text
+        } else {
+            $sourceUserGroups = Get-ADPrincipalGroupMembership -Identity $sourceUser
 
-        $sourceUsername = $copyGroupsTextBox.Text
-    } else {
-        $sourceUserGroups = Get-ADPrincipalGroupMembership -Identity $sourceUser
+            foreach ($group in $sourceUserGroups) {
+                if ($group.Name -ne "Domain Users") {
+                    # Check if user is already a member of the group
+                    $groupMembers = Get-ADGroupMember -Identity $group
 
-        foreach ($group in $sourceUserGroups) {
-            if ($group.Name -ne "Domain Users") {
-                # Check if user is already a member of the group
-                $groupMembers = Get-ADGroupMember -Identity $group
+                    if ($groupMembers | Where-Object { $_.SamAccountName -eq $username }) {
+                        $null = "User $username is already a member of group $($group.SamAccountName). Skipping."
+                    } else {
+                        Add-ADGroupMember -Identity $group -Members $username -ErrorAction SilentlyContinue
+                        $null = "User $username added to group $($group.SamAccountName)."
 
-                if ($groupMembers | Where-Object { $_.SamAccountName -eq $username }) {
-                    $null = "User $username is already a member of group $($group.SamAccountName). Skipping."
-                } else {
-                    Add-ADGroupMember -Identity $group -Members $username -ErrorAction SilentlyContinue
-                    $null = "User $username added to group $($group.SamAccountName)."
-
-                    # Categorize the group as either DL or security
-                    if ($group.groupCategory -eq 'Security') {
-                        $copiedSecurityGroups += $group.Name
-                    } elseif ($group.groupCategory -eq 'Distribution') {
-                        $copiedDLGroups += $group.Name
+                        # Categorize the group as either DL or security
+                        if ($group.groupCategory -eq 'Security') {
+                            $copiedSecurityGroups += $group.Name
+                        } elseif ($group.groupCategory -eq 'Distribution') {
+                            $copiedDLGroups += $group.Name
+                        }
                     }
                 }
             }
+
+            [void][System.Windows.Forms.MessageBox]::Show("Groups copied from $sourceUsername to $username.", "Group Copy Success", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+
+            $groupsCopied = $true
         }
-
-        [void][System.Windows.Forms.MessageBox]::Show("Groups copied from $sourceUsername to $username.", "Group Copy Success", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
-
-        $groupsCopied = $true
     }
-}
 
-
-
-# Show a message box with the generated password
-[void][System.Windows.Forms.MessageBox]::Show("The password for $username is: $password")
-
+    # Show a message box with the generated password
+    [void][System.Windows.Forms.MessageBox]::Show("The password for $username is: $password")
 
     # Create Mailbox
     Get-User -OrganizationalUnit alex.local/alex/users/ -RecipientTypeDetails user | Enable-Mailbox | Out-Null
 
-   
     # Construct and display a detailed message to verify the new user's details
     $subject = "New Users Created"
     $Message = @"
     New User Created: 
     First Name: $firstname 
     Last Name: $lastname 
-    Employess number: $employeeNumber
+    Employee number: $employeeNumber
     Username: $username 
     Manager: $($manager.GivenName) $($manager.Surname)
     Office Location: $officeLocation 
@@ -518,8 +513,8 @@ while (-not $groupsCopied) {
     Make sure to save the initial password in a safe location!
 "@
 
-   $verifyDetails = [System.Windows.Forms.MessageBox]
-   [void] $verifyDetails::Show($Message,"Verify New User Details","OK", "Information")
+    $verifyDetails = [System.Windows.Forms.MessageBox]
+    [void] $verifyDetails::Show($Message,"Verify New User Details","OK", "Information")
     
     # Send an email with user creation details
     $server = "EX2019.alex.local"
@@ -538,17 +533,16 @@ while (-not $groupsCopied) {
     <p><b><font color='black'><h4>Username: $username </b></p></font></h4></b>
     <p><b><font color='black'><h4>Manager: $($manager.GivenName) $($manager.Surname) </b></p></font></h4></b>
     <p><b><font color='black'><h4>Office Location: $officeLocation </b></p></font></h4></b>
-    <p><b><font color='black'><h4>OfficePhone: $officePhone </b></p></font></h4></b>
+    <p><b><font color='black'><h4>Office Phone: $officePhone </b></p></font></h4></b>
     <p><b><font color='black'><h4>E-mail: $email </b></p></font></h4></b>
     <p><b><font color='black'><h4>Groups: $($SelectedGroups -join ",")</b></p></font></h4></b>
     <p><b><font color='black'><h4>DL Groups Copied: $($copiedDLGroups -join ', ')</b></p></font></h4></b>
     <p><b><font color='black'><h4>Security Groups Copied: $($copiedSecurityGroups -join ', ')</b></p></font></h4></b>
-    <p><b><font color='black'><h4>Initial Password: $password</b></p></font></h4></b>
     <p><b><font color='red'><h2>Make sure to save the initial password in a safe location!</b></p></font></h2></b>
     <p><b><font color='green'><h1>Alex IT</b></p></font></h1></b>
 "@
 
-    foreach ($useraname in $username){
+    foreach ($username in $username){
         $message += "$($username.SamAccountName)     $($username.DisplayName)     $($username.emailaddress)
 		"
     }
@@ -556,7 +550,7 @@ while (-not $groupsCopied) {
     # Send the email
     Send-MailMessage -To $to -From $from -Subject $subject -Body $Body -BodyAsHtml -SmtpServer $server
 
-    #Check if user is created successfully or not Pop-Up                
+    # Check if user is created successfully or not Pop-Up                
     $User = Get-ADUser -LDAPFilter "(sAMAccountName=$username)"
     If ($Null -eq $User) {
         [void][System.Windows.Forms.MessageBox]::Show("The user $username not created", "Information")
@@ -565,24 +559,23 @@ while (-not $groupsCopied) {
         [void][System.Windows.Forms.MessageBox]::Show("The user $username created successfully!", "Information")
     }
 
-     # Check if you want to create another user
-        $createAnother = [System.Windows.Forms.MessageBox]::Show("Do you want to create another user?", "Question", [System.Windows.Forms.MessageBoxButtons]::YesNo)
-        if ($createAnother -eq "No") {
-            [void][System.Windows.Forms.MessageBox]::Show("Done, Thank You", "Information")
-            break
-        } else {
-            # Reset the form fields
-            $firstNameTextBox.Text = ""
-            $lastNameTextBox.Text = ""
-            $jobTitleTextBox.Text = ""
-            $managerTextBox.Text = ""
-            $employeeNumberTextBox.Text = ""
-            $officeLocationTextBox.Text = ""
-            $PhoneLabelTextBox.Text = ""
-           
-        }
+    # Check if you want to create another user
+    $createAnother = [System.Windows.Forms.MessageBox]::Show("Do you want to create another user?", "Question", [System.Windows.Forms.MessageBoxButtons]::YesNo)
+    if ($createAnother -eq "No") {
+        [void][System.Windows.Forms.MessageBox]::Show("Done, Thank You", "Information")
+        break
+    } else {
+        # Reset the form fields
+        $firstNameTextBox.Text = ""
+        $lastNameTextBox.Text = ""
+        $jobTitleTextBox.Text = ""
+        $managerTextBox.Text = ""
+        $employeeNumberTextBox.Text = ""
+        $officeLocationTextBox.Text = ""
+        $PhoneLabelTextBox.Text = ""
+        $copyGroupsTextBox.Text = ""
     }
 }
-
+}
 # Close the form after exiting the loop 
 $main_form.Close()
