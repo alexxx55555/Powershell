@@ -1,9 +1,8 @@
-﻿# Prompt for the source and target users
-$sourceUser = Read-Host "Enter the source user email"
-$targetUser = Read-Host "Enter the target user email"
-
 # Connect to Exchange Online
 Connect-ExchangeOnline
+
+$sourceUser = Read-Host "Enter the source user email"
+$targetUser = Read-Host "Enter the target user email"
 
 # Get all distribution groups
 $allDistributionGroups = Get-DistributionGroup -ResultSize Unlimited | Where-Object { $_.RecipientTypeDetails -eq 'MailUniversalDistributionGroup' }
