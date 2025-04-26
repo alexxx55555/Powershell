@@ -1,9 +1,13 @@
 ﻿# Suppress progress bar
 $ProgressPreference = 'SilentlyContinue'
 
+
 # Import Exchange Module
-$s = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri http://ex2019.alex.local/powershell 
-Import-PSSession -session $s -AllowClobber -DisableNameChecking | Out-Null
+$s = New-PSSession -ConfigurationName Microsoft.Exchange `
+                   -ConnectionUri "http://EX2019/powershell/" `
+                   -Authentication Kerberos
+
+Import-PSSession -Session $s -AllowClobber -DisableNameChecking | Out-Null
 
 # Reset progress preference if needed
 $ProgressPreference = 'Continue'
@@ -517,7 +521,7 @@ if ($managerFound) {
     [void] $verifyDetails::Show($Message,"Verify New User Details","OK", "Information")
     
     # Send an email with user creation details
-    $server = "EX2019.alex.local"
+    $server = "EX2019"
     $to = "vinokura@alex.com"
     $from = "ITRobot@alex.com"
     $subject = "New Users Created"
@@ -579,3 +583,5 @@ if ($managerFound) {
 }
 # Close the form after exiting the loop 
 $main_form.Close()
+
+
