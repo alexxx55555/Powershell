@@ -73,7 +73,7 @@ function Get-UserCreationReport {
     param(
         [string]$FirstName,
         [string]$LastName,
-        [int]$EmployeeNumber,
+        [string]$EmployeeNumber,
         [string]$Department,
         [string]$JobTitle,
         [string]$Username,
@@ -89,29 +89,17 @@ function Get-UserCreationReport {
 New User Created:
 
 First Name: $FirstName
-
 Last Name: $LastName
-
 Employee Number: $EmployeeNumber
-
 Department: $Department
-
 Job Title: $JobTitle
-
 Username: $Username
-
 Manager: $ManagerFullName
-
 Office Location: $OfficeLocation
-
 Office Phone: $OfficePhone
-
 E-mail: $Email
-
 DL Groups Copied: $($DLGroupsCopied -join ', ')
-
 Security Groups Copied: $($SecurityGroupsCopied -join ', ')
-
 Initial Password: $Password
 
 Make sure to save the initial password in a safe location!
@@ -124,7 +112,7 @@ Alex IT
 # --- Use EmployeeNumber After Conflict Checking ---
 $empNumResult = Get-AvailableEmployeeNumber -EmployeeNumber $EmployeeNumber
 $finalEmployeeNumber = $empNumResult.EmployeeNumber
-$conflictMsg = $null
+$conflictMsg = ""
 if ($empNumResult.ConflictUser) {
     $conflictMsg = "Requested EmployeeNumber '$($empNumResult.OriginalNumber)' is already used by $($empNumResult.ConflictUser.Name) [$($empNumResult.ConflictUser.SamAccountName)]. Assigned next available: '$finalEmployeeNumber'."
 }
@@ -158,16 +146,49 @@ $email = "$username@alex.com"
 $password = Generate-Password
 $securePassword = ConvertTo-SecureString $password -AsPlainText -Force
 
-# --- Lookup Manager ---
-$manager = Get-ADUser -Filter "SamAccountName -eq '$ManagerSam'" -ErrorAction SilentlyContinue
-$managerFullName = if ($manager) { "$($manager.GivenName) $($manager.Surname)" } else { $ManagerSam }
+# --- Lookup Manager (try SAM first, then full name) ---
+$manager = $null
+$managerFullName = ""
+$managerConflict = ""
+if ($ManagerSam -and $ManagerSam.Trim() -ne "") {
+    try {
+        # Try as SAM first
+        $manager = Get-ADUser -Filter "SamAccountName -eq '$ManagerSam'" -Properties GivenName, Surname -ErrorAction SilentlyContinue
+        if (-not $manager) {
+            # Then try as full name
+            $manager = Get-ADUser -Filter "Name -eq '$ManagerSam'" -Properties GivenName, Surname -ErrorAction SilentlyContinue
+        }
+        if ($manager) {
+            if ($manager -is [array] -and $manager.Count -gt 1) {
+                $managerConflict = "Multiple managers found for '$ManagerSam'. Manager not set."
+                $manager = $null
+            } else {
+                $managerFullName = if ($manager.GivenName -and $manager.Surname) { 
+                    "$($manager.GivenName) $($manager.Surname)" 
+                } else { 
+                    $manager.Name 
+                }
+            }
+        } else {
+            $managerConflict = "Manager '$ManagerSam' not found."
+        }
+    } catch {
+        $managerConflict = "Error looking up manager '$ManagerSam': $_"
+    }
+} else {
+    $managerConflict = "No manager specified."
+}
+if ($managerConflict) {
+    if ($conflictMsg) { $conflictMsg += " $managerConflict" } else { $conflictMsg = $managerConflict }
+    $managerFullName = $managerConflict  # Use message in output for visibility
+}
 
 # --- Create AD User ---
 $adUserParams = @{
-    Name              = $adDisplayName   # Display name with possible (employeeNumber)
+    Name              = $adDisplayName
     GivenName         = $FirstName
     Surname           = $LastName
-    SamAccountName    = $username        # Username logic as specified
+    SamAccountName    = $username
     UserPrincipalName = $email
     AccountPassword   = $securePassword
     Path              = "OU=Users,OU=Alex,DC=alex,DC=local"
@@ -178,7 +199,9 @@ $adUserParams = @{
     Department        = $Department
     Title             = $JobTitle
 }
-if ($manager) { $adUserParams["Manager"] = $manager.DistinguishedName }
+if ($manager) { 
+    $adUserParams["Manager"] = $manager.DistinguishedName 
+}
 
 try {
     New-ADUser @adUserParams
@@ -186,37 +209,65 @@ try {
     Output-ErrorJson "Failed to create AD user: $_"
 }
 
-# --- Copy Group Memberships ---
+# --- Copy Group Memberships (try SAM first, then full name) ---
 $DLGroupsCopied = @()
 $SecurityGroupsCopied = @()
-try {
-    $sourceUser = Get-ADUser -Identity $SourceUsername -Properties MemberOf -ErrorAction SilentlyContinue
-    if ($sourceUser -and $sourceUser.MemberOf) {
-        foreach ($group in $sourceUser.MemberOf) {
-            $adGroup = Get-ADGroup -Identity $group -Properties GroupCategory -ErrorAction SilentlyContinue
-            if ($adGroup) {
-                try {
-                    Add-ADGroupMember -Identity $adGroup -Members $username -ErrorAction Stop
-                    if ($adGroup.GroupCategory -eq 'Security') {
-                        $SecurityGroupsCopied += $adGroup.Name
-                    } else {
-                        $DLGroupsCopied += $adGroup.Name
-                    }
-                } catch {
-                    # Ignore if user already member
-                }
-            }
+$groupCopyMessage = ""
+if ($SourceUsername -and $SourceUsername.Trim() -ne "") {
+    try {
+        $sourceUser = $null
+        # Try as SAM first
+        $sourceUser = Get-ADUser -Filter "SamAccountName -eq '$SourceUsername'" -Properties MemberOf -ErrorAction SilentlyContinue
+        if (-not $sourceUser) {
+            # Then try as full name
+            $sourceUser = Get-ADUser -Filter "Name -eq '$SourceUsername'" -Properties MemberOf -ErrorAction SilentlyContinue
         }
+        if ($sourceUser) {
+            if ($sourceUser -is [array] -and $sourceUser.Count -gt 1) {
+                $groupCopyMessage = "Multiple source users found for '$SourceUsername'. Groups not copied."
+                $sourceUser = $null
+            } elseif ($sourceUser.MemberOf) {
+                $groupsCopiedCount = 0
+                foreach ($group in $sourceUser.MemberOf) {
+                    $adGroup = Get-ADGroup -Identity $group -Properties GroupCategory -ErrorAction SilentlyContinue
+                    if ($adGroup) {
+                        try {
+                            Add-ADGroupMember -Identity $adGroup -Members $username -ErrorAction Stop
+                            if ($adGroup.GroupCategory -eq 'Security') {
+                                $SecurityGroupsCopied += $adGroup.Name
+                            } else {
+                                $DLGroupsCopied += $adGroup.Name
+                            }
+                            $groupsCopiedCount++
+                        } catch {
+                            # Ignore minor errors (e.g., already a member)
+                        }
+                    }
+                }
+                if ($groupsCopiedCount -eq 0) {
+                    $groupCopyMessage = "Source user '$SourceUsername' found but has no group memberships to copy."
+                }
+            } else {
+                $groupCopyMessage = "Source user '$SourceUsername' found but has no group memberships."
+            }
+        } else {
+            $groupCopyMessage = "Source user '$SourceUsername' not found."
+        }
+    } catch {
+        $groupCopyMessage = "Error copying groups from '$SourceUsername': $_"
     }
-} catch {
-    # Fail silently, continue script
+} else {
+    $groupCopyMessage = "No source username provided for group copying."
+}
+if ($groupCopyMessage) {
+    if ($conflictMsg) { $conflictMsg += " $groupCopyMessage" } else { $conflictMsg = $groupCopyMessage }
 }
 
 # --- Enable Exchange Mailbox ---
 try {
     Get-User -Identity $username | Enable-Mailbox | Out-Null
 } catch {
-    # Ignore Exchange errors for now
+    # Ignore for now; add to conflict if needed
 }
 
 # --- Build Report String ---
