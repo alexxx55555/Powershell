@@ -24,14 +24,28 @@ try {
 
 $ProgressPreference = 'SilentlyContinue'
 
-# --- Connect to Exchange ---
+# --- Connect to Exchange (Optional) ---
+$ExchangeOnline = $false
+$exchangeConnectionMessage = ""
+$s = $null
+
 try {
     $s = New-PSSession -ConfigurationName Microsoft.Exchange `
         -ConnectionUri "http://EX2019/powershell/" `
-        -Authentication Kerberos
-    Import-PSSession -Session $s -AllowClobber -DisableNameChecking | Out-Null
+        -Authentication Kerberos -ErrorAction Stop
+    
+    if ($s) {
+        try {
+            Import-PSSession -Session $s -AllowClobber -DisableNameChecking -ErrorAction Stop | Out-Null
+            $ExchangeOnline = $true
+            $exchangeConnectionMessage = "Exchange connection successful. Mailbox will be created."
+        } catch {
+            $exchangeConnectionMessage = "Exchange import failed. Mailbox creation will be skipped."
+            if ($s) { Remove-PSSession -Session $s -ErrorAction SilentlyContinue }
+        }
+    }
 } catch {
-    Output-ErrorJson "Could not connect/import Exchange session. $_"
+    $exchangeConnectionMessage = "Exchange server (EX2019) is not reachable. Mailbox creation will be skipped."
 }
 
 # --- Input Validation ---
@@ -83,8 +97,10 @@ function Get-UserCreationReport {
         [string]$Email,
         [string[]]$DLGroupsCopied,
         [string[]]$SecurityGroupsCopied,
-        [string]$Password
+        [string]$Password,
+        [bool]$MailboxCreated
     )
+    $mailboxStatus = if ($MailboxCreated) { "Yes" } else { "No" }
     $report = @"
 New User Created:
 
@@ -98,6 +114,7 @@ Manager: $ManagerFullName
 Office Location: $OfficeLocation
 Office Phone: $OfficePhone
 E-mail: $Email
+Mailbox Created: $mailboxStatus
 DL Groups Copied: $($DLGroupsCopied -join ', ')
 Security Groups Copied: $($SecurityGroupsCopied -join ', ')
 Initial Password: $Password
@@ -263,11 +280,23 @@ if ($groupCopyMessage) {
     if ($conflictMsg) { $conflictMsg += " $groupCopyMessage" } else { $conflictMsg = $groupCopyMessage }
 }
 
-# --- Enable Exchange Mailbox ---
-try {
-    Get-User -Identity $username | Enable-Mailbox | Out-Null
-} catch {
-    # Ignore for now; add to conflict if needed
+# --- Enable Exchange Mailbox (Only if Exchange is Online) ---
+$mailboxCreated = $false
+if ($ExchangeOnline) {
+    try {
+        if ($s) {
+            Get-User -Identity $username -ErrorAction Stop | Enable-Mailbox -ErrorAction Stop | Out-Null
+            $mailboxCreated = $true
+        } else {
+            $mailboxMessage = "Exchange session lost. Mailbox creation skipped."
+            if ($conflictMsg) { $conflictMsg += " $mailboxMessage" } else { $conflictMsg = $mailboxMessage }
+        }
+    } catch {
+        $mailboxMessage = "Warning: Mailbox creation failed: $_"
+        if ($conflictMsg) { $conflictMsg += " $mailboxMessage" } else { $conflictMsg = $mailboxMessage }
+    }
+} else {
+    if ($conflictMsg) { $conflictMsg += " $exchangeConnectionMessage" } else { $conflictMsg = $exchangeConnectionMessage }
 }
 
 # --- Build Report String ---
@@ -284,7 +313,8 @@ $creationReport = Get-UserCreationReport `
     -Email $email `
     -DLGroupsCopied $DLGroupsCopied `
     -SecurityGroupsCopied $SecurityGroupsCopied `
-    -Password $password
+    -Password $password `
+    -MailboxCreated $mailboxCreated
 
 # --- Output API-Ready JSON ---
 $userDetails = [PSCustomObject]@{
@@ -298,6 +328,8 @@ $userDetails = [PSCustomObject]@{
     OfficeLocation      = $OfficeLocation
     OfficePhone         = $OfficePhone
     Email               = $email
+    MailboxCreated      = $mailboxCreated
+    ExchangeOnline      = $ExchangeOnline
     DLGroupsCopied      = $DLGroupsCopied
     SecurityGroupsCopied= $SecurityGroupsCopied
     Password            = $password
