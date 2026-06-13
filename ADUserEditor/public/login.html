@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AD User Editor — Login</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:      #1a1a1a;
+    --surface: #252525;
+    --border:  #3a3a3a;
+    --text:    #f0f0f0;
+    --muted:   #999;
+    --blue:    #0078d4;
+    --blue-dk: #005a9e;
+    --red:     #a4262c;
+    --radius:  6px;
+  }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.3);
+    padding: 36px 40px;
+    width: 380px;
+  }
+  .logo { display:flex; align-items:center; gap:10px; margin-bottom:28px; }
+  .logo h1 { font-size:18px; font-weight:600; }
+  .badge { font-size:11px; padding:2px 8px; border-radius:20px; background:var(--blue); color:#fff; font-weight:500; }
+  .step { display:none; }
+  .step.active { display:block; }
+  .form-group { margin-bottom:16px; }
+  label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
+  input[type=text], input[type=password], input[type=number] {
+    width:100%; height:36px; padding:0 12px; border:1px solid var(--border);
+    border-radius:var(--radius); background:#2e2e2e; color:var(--text);
+    font-size:14px; outline:none; transition:border-color 0.15s;
+  }
+  input:focus { border-color:var(--blue); }
+  .btn {
+    width:100%; height:38px; background:var(--blue); color:#fff; border:none;
+    border-radius:var(--radius); font-size:14px; font-weight:500; cursor:pointer;
+    margin-top:8px; transition:background 0.15s;
+  }
+  .btn:hover { background:var(--blue-dk); }
+  .btn:disabled { opacity:0.5; cursor:not-allowed; }
+  .error { background:#3a1515; border:1px solid #6e0a0d; color:#f4a0a0; border-radius:var(--radius); padding:10px 12px; font-size:13px; margin-bottom:16px; display:none; }
+  .error.visible { display:block; }
+  .hint { font-size:12px; color:var(--muted); margin-top:16px; text-align:center; }
+  .qr-wrap { text-align:center; margin:16px 0; }
+  .qr-wrap img { border-radius:8px; background:#fff; padding:8px; }
+  .secret-box { background:#1a1a1a; border:1px solid var(--border); border-radius:var(--radius); padding:10px 12px; font-family:monospace; font-size:13px; text-align:center; word-break:break-all; margin-bottom:16px; color:#7dd3a8; }
+  .step-title { font-size:15px; font-weight:600; margin-bottom:6px; }
+  .step-desc  { font-size:13px; color:var(--muted); margin-bottom:20px; line-height:1.5; }
+  .code-input { text-align:center; font-size:22px; letter-spacing:8px; font-family:monospace; }
+  .back-link { display:block; text-align:center; margin-top:14px; font-size:13px; color:var(--muted); cursor:pointer; }
+  .back-link:hover { color:var(--text); }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <h1>AD User Editor</h1>
+    <span class="badge">alex.local</span>
+  </div>
+
+  <div class="error" id="errorMsg"></div>
+
+  <!-- Step 1: Username + Password -->
+  <div class="step active" id="step-password">
+    <div class="form-group">
+      <label>Username</label>
+      <input type="text" id="username" autocomplete="username" autofocus placeholder="Enter your username">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="password" autocomplete="current-password" placeholder="••••••••">
+    </div>
+    <button class="btn" id="btnPassword" onclick="doLogin()">Continue</button>
+    <p class="hint">Sign in with your alex.local domain account</p>
+  </div>
+
+  <!-- Step 2a: TOTP verification -->
+  <div class="step" id="step-totp">
+    <p class="step-title">Two-factor authentication</p>
+    <p class="step-desc">Enter the 6-digit code from your authenticator app.</p>
+    <div class="form-group">
+      <label>Authenticator code</label>
+      <input type="number" id="totpCode" class="code-input" placeholder="000000" maxlength="6" autocomplete="one-time-code">
+    </div>
+    <button class="btn" id="btnTotp" onclick="doTotp()">Verify</button>
+    <span class="back-link" onclick="goBack()">← Back</span>
+  </div>
+
+  <!-- Step 2b: First-time TOTP setup -->
+  <div class="step" id="step-setup">
+    <p class="step-title">Set up two-factor authentication</p>
+    <p class="step-desc">Scan this QR code with Google Authenticator or Microsoft Authenticator, then enter the 6-digit code to confirm.</p>
+    <div class="qr-wrap" id="qrWrap"></div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:8px;text-align:center;">Or enter this secret manually:</p>
+    <div class="secret-box" id="secretBox"></div>
+    <div class="form-group">
+      <label>Enter the 6-digit code to confirm</label>
+      <input type="number" id="setupCode" class="code-input" placeholder="000000" maxlength="6" autocomplete="one-time-code">
+    </div>
+    <button class="btn" id="btnSetup" onclick="doSetup()">Activate</button>
+    <span class="back-link" onclick="goBack()">← Back</span>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+function showError(msg) {
+  const el = document.getElementById('errorMsg');
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+function hideError() {
+  document.getElementById('errorMsg').classList.remove('visible');
+}
+function showStep(id) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  hideError();
+}
+function goBack() { showStep('step-password'); }
+function setLoading(btn, loading) {
+  btn.disabled = loading;
+  btn.textContent = loading ? 'Please wait...' : btn.dataset.label;
+}
+
+document.getElementById('btnPassword').dataset.label = 'Continue';
+document.getElementById('btnTotp').dataset.label = 'Verify';
+document.getElementById('btnSetup').dataset.label = 'Activate';
+
+document.getElementById('password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('totpCode').addEventListener('keydown', e => { if (e.key === 'Enter') doTotp(); });
+document.getElementById('setupCode').addEventListener('keydown', e => { if (e.key === 'Enter') doSetup(); });
+
+async function doLogin() {
+  const btn = document.getElementById('btnPassword');
+  hideError();
+  setLoading(btn, true);
+  try {
+    const res  = await fetch('/login', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ username: document.getElementById('username').value.trim(), password: document.getElementById('password').value }) });
+    const data = await res.json();
+    if (data.error) { showError(data.error); return; }
+    if (data.nextStep === 'totp') {
+      showStep('step-totp');
+      document.getElementById('totpCode').focus();
+    } else if (data.nextStep === 'setup') {
+      await loadSetup();
+      showStep('step-setup');
+    }
+  } catch(e) { showError('Could not connect to server.'); }
+  finally { setLoading(btn, false); }
+}
+
+async function loadSetup() {
+  const res  = await fetch('/login/setup-data');
+  const data = await res.json();
+  if (data.error) { showError(data.error); return; }
+  document.getElementById('secretBox').textContent = data.secret;
+  document.getElementById('qrWrap').innerHTML = '';
+  new QRCode(document.getElementById('qrWrap'), { text: data.otpauth, width:180, height:180, colorDark:'#000', colorLight:'#fff' });
+}
+
+async function doTotp() {
+  const btn  = document.getElementById('btnTotp');
+  const code = document.getElementById('totpCode').value.trim().padStart(6,'0');
+  hideError();
+  setLoading(btn, true);
+  try {
+    const res  = await fetch('/login/totp', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code }) });
+    const data = await res.json();
+    if (data.error) { showError(data.error); return; }
+    window.location.href = '/';
+  } catch(e) { showError('Could not connect to server.'); }
+  finally { setLoading(btn, false); }
+}
+
+async function doSetup() {
+  const btn  = document.getElementById('btnSetup');
+  const code = document.getElementById('setupCode').value.trim().padStart(6,'0');
+  hideError();
+  setLoading(btn, true);
+  try {
+    const res  = await fetch('/login/setup', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code }) });
+    const data = await res.json();
+    if (data.error) { showError(data.error); return; }
+    window.location.href = '/';
+  } catch(e) { showError('Could not connect to server.'); }
+  finally { setLoading(btn, false); }
+}
+</script>
+</body>
+</html>

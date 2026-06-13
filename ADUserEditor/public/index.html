@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AD User Editor</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #f5f5f5;
+    --surface:  #ffffff;
+    --border:   #e0e0e0;
+    --text:     #1a1a1a;
+    --muted:    #6b6b6b;
+    --blue:     #0078d4;
+    --blue-dk:  #005a9e;
+    --green:    #107c10;
+    --green-dk: #0a5f0a;
+    --purple:   #5c2d91;
+    --red:      #a4262c;
+    --warn-bg:  #fff4ce;
+    --warn-br:  #f0c010;
+    --err-bg:   #fde7e9;
+    --err-br:   #d13438;
+    --ok-bg:    #dff6dd;
+    --ok-br:    #107c10;
+    --input-bg: #ffffff;
+    --readonly: #f3f3f3;
+    --radius:   6px;
+    --shadow:   0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:      #1a1a1a;
+      --surface: #252525;
+      --border:  #3a3a3a;
+      --text:    #f0f0f0;
+      --muted:   #999;
+      --input-bg:#2e2e2e;
+      --readonly:#222;
+    }
+  }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 14px;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 24px 16px;
+  }
+
+  .shell {
+    max-width: 780px;
+    margin: 0 auto;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  header h1 {
+    font-size: 20px;
+    font-weight: 600;
+  }
+  .badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    background: var(--blue);
+    color: #fff;
+    font-weight: 500;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  /* Search bar */
+  .search-row {
+    display: flex;
+    gap: 8px;
+  }
+  .search-row input {
+    flex: 1;
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--input-bg);
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .search-row input:focus { border-color: var(--blue); }
+  #autocomplete-list {
+    position: absolute;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 100;
+    width: 300px;
+  }
+  #autocomplete-list:empty { display: none; }
+  #autocomplete-list div {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  #autocomplete-list div:hover,
+  #autocomplete-list div.active { background: var(--bg); }
+  .search-wrap { position: relative; flex: 1; }
+
+  /* Buttons */
+  .btn {
+    height: 36px;
+    padding: 0 16px;
+    border-radius: var(--radius);
+    border: none;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, opacity 0.15s;
+    white-space: nowrap;
+  }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-primary   { background: var(--blue);   color: #fff; }
+  .btn-primary:hover:not(:disabled)  { background: var(--blue-dk); }
+  .btn-success   { background: var(--green);  color: #fff; }
+  .btn-success:hover:not(:disabled)  { background: var(--green-dk); }
+  .btn-purple    { background: var(--purple); color: #fff; }
+  .btn-purple:hover:not(:disabled)   { background: #4a2070; }
+  .btn-danger    { background: var(--red);    color: #fff; }
+  .btn-ghost     { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  .btn-ghost:hover:not(:disabled)    { background: var(--bg); }
+  .btn-sm { height: 30px; padding: 0 12px; font-size: 13px; }
+
+  /* Form grid */
+  .form-grid {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 10px 16px;
+    align-items: center;
+  }
+  .form-label {
+    font-size: 13px;
+    color: var(--muted);
+    text-align: right;
+  }
+  .form-input {
+    width: 100%;
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--input-bg);
+    color: var(--text);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .form-input:focus  { border-color: var(--blue); }
+  .form-input:disabled,
+  .form-input.readonly {
+    background: var(--readonly);
+    color: var(--muted);
+    cursor: default;
+  }
+
+  /* Radio toggles */
+  .toggle-group {
+    display: flex;
+    gap: 4px;
+  }
+  .toggle-group label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .toggle-group input[type=radio] { accent-color: var(--blue); }
+  .toggle-group label:has(input:checked) {
+    border-color: var(--blue);
+    background: color-mix(in srgb, var(--blue) 10%, transparent);
+  }
+
+  /* Status banner */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .status-bar.info    { background: #e6f2fb; border: 1px solid #90c8f6; color: #0c4a78; }
+  .status-bar.success { background: var(--ok-bg); border: 1px solid var(--ok-br); color: #0a4a0a; }
+  .status-bar.warning { background: var(--warn-bg); border: 1px solid var(--warn-br); color: #5a4000; }
+  .status-bar.error   { background: var(--err-bg); border: 1px solid var(--err-br); color: #6e0a0d; }
+  .status-bar.hidden  { display: none; }
+
+  /* Account status pills */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 20px;
+  }
+  .pill.enabled  { background: var(--ok-bg);  color: #0a4a0a; border: 1px solid var(--ok-br); }
+  .pill.disabled { background: var(--err-bg); color: #6e0a0d; border: 1px solid var(--err-br); }
+  .pill.locked   { background: var(--warn-bg);color: #5a4000; border: 1px solid var(--warn-br); }
+
+  /* Action row */
+  .action-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+
+  /* Section divider */
+  .section-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 16px 0;
+  }
+
+  /* Modal overlay */
+  .modal-backdrop {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    padding: 24px;
+    width: 420px;
+    max-width: 95vw;
+  }
+  .modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+  .modal .form-grid { grid-template-columns: 140px 1fr; }
+  .modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+  /* Loading spinner */
+  .spinner {
+    display: inline-block;
+    width: 16px; height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Emp number hint */
+  .field-hint { font-size: 11px; color: var(--red); margin-top: 2px; display: none; }
+  .field-hint.visible { display: block; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header>
+    <h1>AD User Editor</h1>
+    <span class="badge">alex.local</span>
+    <a href="/logout" style="margin-left:auto;font-size:13px;color:var(--muted);text-decoration:none;padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);">Sign out</a>
+  </header>
+
+  <!-- Status banner -->
+  <div id="statusBar" class="status-bar hidden" role="alert"></div>
+
+  <!-- Search card -->
+  <div class="card">
+    <div class="card-title">Search user</div>
+    <div class="search-row">
+      <div class="search-wrap">
+        <input type="text" id="usernameInput" placeholder="Type a username..." autocomplete="off" spellcheck="false">
+        <div id="autocomplete-list"></div>
+      </div>
+      <button class="btn btn-primary" id="btnSearch">Search</button>
+      <button class="btn btn-ghost" id="btnClear" title="Clear form">Clear</button>
+    </div>
+  </div>
+
+  <!-- User detail card (hidden until search) -->
+  <div class="card hidden" id="userCard">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+      <div class="card-title" style="margin:0">User details</div>
+      <div id="accountPills" style="display:flex;gap:6px;"></div>
+    </div>
+
+    <div class="form-grid">
+      <span class="form-label">First name</span>
+      <input class="form-input" id="fFirstName" type="text">
+
+      <span class="form-label">Last name</span>
+      <input class="form-input" id="fLastName" type="text">
+
+      <span class="form-label">Display name</span>
+      <input class="form-input" id="fDisplayName" type="text">
+
+      <span class="form-label">Email</span>
+      <input class="form-input readonly" id="fEmail" type="text" readonly tabindex="-1">
+
+      <span class="form-label">Phone</span>
+      <input class="form-input" id="fPhone" type="text">
+
+      <span class="form-label">Employee number</span>
+      <div>
+        <input class="form-input" id="fEmpNum" type="text" maxlength="4">
+        <div class="field-hint" id="empNumHint"></div>
+      </div>
+
+      <span class="form-label">Title</span>
+      <input class="form-input" id="fTitle" type="text">
+
+      <span class="form-label">Manager</span>
+      <input class="form-input" id="fManager" type="text">
+
+      <span class="form-label">Office</span>
+      <input class="form-input" id="fOffice" type="text">
+
+      <span class="form-label">Description</span>
+      <input class="form-input" id="fDescription" type="text">
+
+      <span class="form-label">Security groups</span>
+      <input class="form-input readonly" id="fSecGroups" type="text" readonly tabindex="-1">
+
+      <span class="form-label">Distribution groups</span>
+      <input class="form-input readonly" id="fDistGroups" type="text" readonly tabindex="-1">
+
+      <span class="form-label">Account status</span>
+      <div class="toggle-group" id="accountToggle">
+        <label><input type="radio" name="acctStatus" value="true"> Enable account</label>
+        <label><input type="radio" name="acctStatus" value="false"> Disable account</label>
+      </div>
+    </div>
+
+    <hr class="section-divider">
+
+    <div class="action-row">
+      <button class="btn btn-success" id="btnSave">Save changes</button>
+      <button class="btn btn-primary btn-sm" id="btnResetPwd">Reset password</button>
+      <button class="btn btn-purple btn-sm" id="btnUnlock">Unlock account</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Password reset modal -->
+<div class="modal-backdrop" id="pwdModal" role="dialog" aria-modal="true" aria-labelledby="pwdModalTitle">
+  <div class="modal">
+    <h2 id="pwdModalTitle">Reset password</h2>
+    <div class="form-grid">
+      <span class="form-label">New password</span>
+      <input class="form-input" id="pwdNew" type="password" autocomplete="new-password">
+
+      <span class="form-label">Confirm password</span>
+      <input class="form-input" id="pwdConfirm" type="password" autocomplete="new-password">
+
+      <span class="form-label"></span>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+        <input type="checkbox" id="pwdMustChange" checked>
+        Must change at next login
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="pwdCancel">Cancel</button>
+      <button class="btn btn-primary" id="pwdSubmit">Reset password</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let allUsers = [];
+let currentUser = null;
+let empDebounce = null;
+
+// ── Utilities ──────────────────────────────────────────────────────────────
+
+function showStatus(msg, type = 'info') {
+  const bar = document.getElementById('statusBar');
+  bar.className = `status-bar ${type}`;
+  bar.innerHTML = msg;
+}
+function hideStatus() {
+  document.getElementById('statusBar').className = 'status-bar hidden';
+}
+
+async function apiFetch(path, opts = {}) {
+  const res = await fetch(API + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts
+  });
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch (_) {
+    throw new Error(`Server error (HTTP ${res.status}). Check the PowerShell console for details.`);
+  }
+  // Always check for error field in body regardless of HTTP status
+  if (data && data.error === 'Unauthorized. Please log in.') {
+    window.location.href = '/login';
+    return;
+  }
+  if (data && data.error) throw new Error(data.error);
+  return data;
+}
+
+function setLoading(btn, loading) {
+  if (loading) {
+    btn.dataset.origText = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner"></span>';
+    btn.disabled = true;
+  } else {
+    btn.innerHTML = btn.dataset.origText || btn.innerHTML;
+    btn.disabled = false;
+  }
+}
+
+// ── Autocomplete ───────────────────────────────────────────────────────────
+
+async function loadUsers() {
+  try {
+    const data = await apiFetch('/api/users');
+    allUsers = data.users || [];
+  } catch (e) {
+    showStatus('Could not load user list from AD. Manual entry still works.', 'warning');
+  }
+}
+
+const input = document.getElementById('usernameInput');
+const acList = document.getElementById('autocomplete-list');
+let acIndex = -1;
+
+input.addEventListener('input', () => {
+  const val = input.value.trim().toLowerCase();
+  acList.innerHTML = '';
+  acIndex = -1;
+  if (!val || val.length < 2) return;
+  const matches = allUsers.filter(u => u.toLowerCase().startsWith(val)).slice(0, 12);
+  matches.forEach((u, i) => {
+    const div = document.createElement('div');
+    div.textContent = u;
+    div.addEventListener('mousedown', () => { input.value = u; acList.innerHTML = ''; });
+    acList.appendChild(div);
+  });
+});
+
+input.addEventListener('keydown', e => {
+  const items = acList.querySelectorAll('div');
+  if (e.key === 'ArrowDown') { acIndex = Math.min(acIndex + 1, items.length - 1); }
+  else if (e.key === 'ArrowUp') { acIndex = Math.max(acIndex - 1, -1); }
+  else if (e.key === 'Enter') {
+    if (acIndex >= 0 && items[acIndex]) { input.value = items[acIndex].textContent; acList.innerHTML = ''; }
+    else { doSearch(); }
+    return;
+  } else if (e.key === 'Escape') { acList.innerHTML = ''; return; }
+  items.forEach((el, i) => el.classList.toggle('active', i === acIndex));
+  if (items[acIndex]) items[acIndex].scrollIntoView({ block: 'nearest' });
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.search-wrap')) acList.innerHTML = '';
+});
+
+// ── Search ─────────────────────────────────────────────────────────────────
+
+document.getElementById('btnSearch').addEventListener('click', doSearch);
+
+async function doSearch() {
+  const username = input.value.trim();
+  if (!username) { showStatus('Please enter a username.', 'warning'); return; }
+
+  const btn = document.getElementById('btnSearch');
+  setLoading(btn, true);
+  hideStatus();
+
+  try {
+    const user = await apiFetch(`/api/user/${encodeURIComponent(username)}`);
+    currentUser = user;
+    populateForm(user);
+    document.getElementById('userCard').classList.remove('hidden');
+    showStatus(`Loaded: <strong>${user.displayName}</strong>`, 'info');
+  } catch (e) {
+    showStatus(e.message, 'error');
+    document.getElementById('userCard').classList.add('hidden');
+  } finally {
+    setLoading(btn, false);
+  }
+}
+
+function populateForm(u) {
+  document.getElementById('fFirstName').value   = u.firstName   || '';
+  document.getElementById('fLastName').value    = u.lastName    || '';
+  document.getElementById('fDisplayName').value = u.displayName || '';
+  document.getElementById('fEmail').value       = u.email       || '';
+  document.getElementById('fPhone').value       = u.phone       || '';
+  document.getElementById('fEmpNum').value      = u.employeeNumber || '';
+  document.getElementById('fTitle').value       = u.title       || '';
+  document.getElementById('fManager').value     = u.manager     || '';
+  document.getElementById('fOffice').value      = u.office      || '';
+  document.getElementById('fDescription').value = u.description || '';
+  document.getElementById('fSecGroups').value   = u.secGroups   || '';
+  document.getElementById('fDistGroups').value  = u.distGroups  || '';
+
+  // Employee number — lock if already set
+  const empInput = document.getElementById('fEmpNum');
+  if (u.employeeNumber) {
+    empInput.classList.add('readonly');
+    empInput.readOnly = true;
+  } else {
+    empInput.classList.remove('readonly');
+    empInput.readOnly = false;
+  }
+
+  // Account status radio
+  const radios = document.querySelectorAll('input[name="acctStatus"]');
+  radios.forEach(r => { r.checked = (r.value === String(u.enabled)); });
+
+  // Status pills
+  const pillsEl = document.getElementById('accountPills');
+  pillsEl.innerHTML = '';
+  const enabledPill = document.createElement('span');
+  enabledPill.className = `pill ${u.enabled ? 'enabled' : 'disabled'}`;
+  enabledPill.textContent = u.enabled ? 'Enabled' : 'Disabled';
+  pillsEl.appendChild(enabledPill);
+  if (u.lockedOut) {
+    const lockPill = document.createElement('span');
+    lockPill.className = 'pill locked';
+    lockPill.textContent = 'Locked';
+    pillsEl.appendChild(lockPill);
+  }
+
+  document.getElementById('empNumHint').classList.remove('visible');
+}
+
+// ── Employee number debounce check ─────────────────────────────────────────
+
+document.getElementById('fEmpNum').addEventListener('input', () => {
+  clearTimeout(empDebounce);
+  const hint = document.getElementById('empNumHint');
+  hint.classList.remove('visible');
+  const val = document.getElementById('fEmpNum').value.trim();
+  if (!val || val.length < 1) return;
+  empDebounce = setTimeout(async () => {
+    try {
+      const data = await apiFetch(`/api/empnum/check/${encodeURIComponent(val)}`);
+      if (data.inUse) {
+        hint.textContent = `Already used by ${data.owner}. Next available: ${data.nextAvailable}`;
+        hint.classList.add('visible');
+      }
+    } catch (_) {}
+  }, 800);
+});
+
+// ── Save ───────────────────────────────────────────────────────────────────
+
+document.getElementById('btnSave').addEventListener('click', async () => {
+  if (!currentUser) return;
+  if (!confirm(`Save changes to ${currentUser.samAccountName}?`)) return;
+
+  const btn = document.getElementById('btnSave');
+  setLoading(btn, true);
+
+  const selectedStatus = document.querySelector('input[name="acctStatus"]:checked');
+
+  const body = {
+    firstName:      document.getElementById('fFirstName').value.trim(),
+    lastName:       document.getElementById('fLastName').value.trim(),
+    displayName:    document.getElementById('fDisplayName').value.trim(),
+    email:          document.getElementById('fEmail').value.trim(),
+    phone:          document.getElementById('fPhone').value.trim(),
+    title:          document.getElementById('fTitle').value.trim(),
+    manager:        document.getElementById('fManager').value.trim(),
+    office:         document.getElementById('fOffice').value.trim(),
+    description:    document.getElementById('fDescription').value.trim(),
+    managerDN:      currentUser.managerDN,
+    enabled:        selectedStatus ? selectedStatus.value === 'true' : null,
+  };
+
+  const empVal = document.getElementById('fEmpNum').value.trim();
+  if (!document.getElementById('fEmpNum').readOnly && empVal) {
+    body.employeeNumber = empVal;
+  }
+
+  try {
+    const res = await apiFetch(`/api/user/${encodeURIComponent(currentUser.samAccountName)}/update`, {
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
+    showStatus(res.message, 'success');
+    // Refresh displayed data
+    const updated = await apiFetch(`/api/user/${encodeURIComponent(currentUser.samAccountName)}`);
+    currentUser = updated;
+    populateForm(updated);
+  } catch (e) {
+    showStatus(`Save failed: ${e.message}`, 'error');
+  } finally {
+    setLoading(btn, false);
+  }
+});
+
+// ── Clear ──────────────────────────────────────────────────────────────────
+
+document.getElementById('btnClear').addEventListener('click', () => {
+  input.value = '';
+  currentUser = null;
+  document.getElementById('userCard').classList.add('hidden');
+  hideStatus();
+});
+
+// ── Password reset modal ───────────────────────────────────────────────────
+
+document.getElementById('btnResetPwd').addEventListener('click', () => {
+  document.getElementById('pwdNew').value = '';
+  document.getElementById('pwdConfirm').value = '';
+  document.getElementById('pwdMustChange').checked = true;
+  document.getElementById('pwdModal').classList.add('open');
+  document.getElementById('pwdNew').focus();
+});
+
+document.getElementById('pwdCancel').addEventListener('click', () => {
+  document.getElementById('pwdModal').classList.remove('open');
+});
+
+document.getElementById('pwdModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('pwdModal'))
+    document.getElementById('pwdModal').classList.remove('open');
+});
+
+document.getElementById('pwdSubmit').addEventListener('click', async () => {
+  const pwd     = document.getElementById('pwdNew').value;
+  const confirm = document.getElementById('pwdConfirm').value;
+  const must    = document.getElementById('pwdMustChange').checked;
+
+  if (!pwd)          { alert('Password cannot be empty.'); return; }
+  if (pwd !== confirm){ alert('Passwords do not match.');   return; }
+
+  const btn = document.getElementById('pwdSubmit');
+  setLoading(btn, true);
+
+  try {
+    const res = await apiFetch(`/api/user/${encodeURIComponent(currentUser.samAccountName)}/password`, {
+      method: 'POST',
+      body: JSON.stringify({ password: pwd, mustChange: must })
+    });
+    document.getElementById('pwdModal').classList.remove('open');
+    showStatus(res.message, 'success');
+  } catch (e) {
+    alert(`Password reset failed: ${e.message}`);
+  } finally {
+    setLoading(btn, false);
+  }
+});
+
+// ── Unlock ─────────────────────────────────────────────────────────────────
+
+document.getElementById('btnUnlock').addEventListener('click', async () => {
+  if (!currentUser) return;
+  const btn = document.getElementById('btnUnlock');
+  setLoading(btn, true);
+  try {
+    const res = await apiFetch(`/api/user/${encodeURIComponent(currentUser.samAccountName)}/unlock`, {
+      method: 'POST'
+    });
+    showStatus(res.message, 'success');
+    // Refresh pills
+    const updated = await apiFetch(`/api/user/${encodeURIComponent(currentUser.samAccountName)}`);
+    currentUser = updated;
+    populateForm(updated);
+  } catch (e) {
+    showStatus(`Unlock failed: ${e.message}`, 'error');
+  } finally {
+    setLoading(btn, false);
+  }
+});
+
+// ── Init ───────────────────────────────────────────────────────────────────
+async function checkAuth() {
+  try {
+    const res = await fetch("/api/users");
+    const data = JSON.parse(await res.text());
+    if (data.error) { window.location.href = "/login"; return; }
+  } catch(_) { window.location.href = "/login"; return; }
+  loadUsers();
+}
+checkAuth();
+</script>
+</body>
+</html>
+
+
