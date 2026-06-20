@@ -1,7 +1,35 @@
-﻿# Load the necessary assemblies
+<#
+.SYNOPSIS
+    GUI tool to add Active Directory users to security or distribution groups.
+
+.DESCRIPTION
+    This script provides a Windows Forms GUI interface for adding users to Active Directory groups.
+    It validates that both the user and group exist before attempting to add the membership.
+
+.EXAMPLE
+    .\Add users to groups.ps1
+    Launches the GUI interface for adding users to groups.
+
+.NOTES
+    Author: IT Department
+    Requires: ActiveDirectory module
+    Requires: Windows PowerShell 5.1 or later
+#>
+
+#Requires -Modules ActiveDirectory
+#Requires -Version 5.1
+
+# Load the necessary assemblies
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
-Import-Module ActiveDirectory
+
+try {
+    Import-Module ActiveDirectory -ErrorAction Stop
+}
+catch {
+    [System.Windows.Forms.MessageBox]::Show("Failed to load Active Directory module. Please ensure it is installed.", "Module Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+    exit 1
+}
 
 # Create a new Windows Forms application
 $Form = New-Object Windows.Forms.Form
