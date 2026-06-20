@@ -1,0 +1,1 @@
+﻿Get-ScheduledTask -TaskName "AD*" | Format-Table TaskName, State
